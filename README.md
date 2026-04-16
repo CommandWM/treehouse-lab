@@ -1,6 +1,6 @@
-# Booster Seat
+# Treehouse Lab
 
-Booster Seat is a Karpathy-style autoresearch loop for tabular machine learning.
+Treehouse Lab is a Karpathy-style autoresearch loop for tabular machine learning.
 
 The idea is simple: give an agent a constrained playground around XGBoost style models, let it propose experiments, run them safely, keep only the winners, and leave behind a readable research log instead of a pile of notebook debris.
 
@@ -14,7 +14,7 @@ Karpathy's `autoresearch` pattern is brilliant, but it was built around small la
 - strong baselines already exist
 - business integration is much easier
 
-Booster Seat is aimed at that gap.
+Treehouse Lab is aimed at that gap.
 
 ## Design principles
 
@@ -51,13 +51,13 @@ Later versions can add LightGBM, CatBoost, time series, richer feature stores, a
 
 - `datasets/` dataset specs and split policies
 - `configs/` model spaces, budgets, and guardrails
-- `src/booster_seat/` runner, evaluator, registry, journal, mutators
+- `src/treehouse_lab/` runner, evaluator, registry, journal, mutators
 - `program.md` agent instructions for Codex or Claude Code
 - `docs/` architecture notes, roadmap, and experiment policy
 
 ## Open source building blocks
 
-Booster Seat is not trying to reimplement the whole ecosystem. It should stand on the shoulders of tools that already work:
+Treehouse Lab is not trying to reimplement the whole ecosystem. It should stand on the shoulders of tools that already work:
 
 - [XGBoost](https://github.com/dmlc/xgboost)
 - [Optuna](https://optuna.org/)
@@ -85,9 +85,9 @@ See [docs/mvp.md](docs/mvp.md) for the build plan.
 
 ## Name
 
-Why "Booster Seat"?
+Why "Treehouse Lab"?
 
-Because the project gives boosting models a disciplined leg-up, and because a little cheekiness makes the repo more memorable than yet another grimly serious `tabular-autoresearch` clone.
+Because it feels like a place to tinker, test, and build sharp ideas above the noise, while still sounding like a serious public project instead of a tax form.
 
 ## License
 

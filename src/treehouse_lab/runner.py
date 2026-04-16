@@ -10,8 +10,8 @@ class ExperimentResult:
     notes: str = ""
 
 
-class BoosterSeatRunner:
-    """Placeholder runner for the Booster Seat experiment loop.
+class TreehouseLabRunner:
+    """Placeholder runner for the Treehouse Lab experiment loop.
 
     The real implementation should own:
     - dataset loading

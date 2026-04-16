@@ -1,6 +1,6 @@
-# Booster Seat Program
+# Treehouse Lab Program
 
-You are working inside Booster Seat, a tabular autoresearch project.
+You are working inside Treehouse Lab, a tabular autoresearch project.
 
 Your job is not to freestyle. Your job is to improve the incumbent model under strict evaluation discipline.
 

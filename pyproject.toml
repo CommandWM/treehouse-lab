@@ -3,7 +3,7 @@ requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "booster-seat"
+name = "treehouse-lab"
 version = "0.1.0"
 description = "Karpathy-style autoresearch loops for tabular ML"
 readme = "README.md"
