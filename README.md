@@ -1,5 +1,9 @@
 # Treehouse Lab
 
+<p align="center">
+  <img src="docs/assets/treehouse-lab.png" alt="Treehouse Lab logo" width="420" />
+</p>
+
 Treehouse Lab is a Karpathy-style autoresearch loop for tabular machine learning.
 
 The idea is simple: give an agent a constrained playground around XGBoost style models, let it propose experiments, run them safely, keep only the winners, and leave behind a readable research log instead of a pile of notebook debris.
