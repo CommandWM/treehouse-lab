@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "treehouse-lab"
-version = "0.1.0"
+version = "0.8.0"
 description = "Karpathy-style autoresearch loops for tabular ML"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -22,10 +22,15 @@ dependencies = [
 
 [project.scripts]
 treehouse-lab = "treehouse_lab.cli:main"
+treehouse-lab-api = "treehouse_lab.api:main"
 
 [project.optional-dependencies]
 ui = [
   "streamlit>=1.49"
+]
+web = [
+  "fastapi>=0.115",
+  "uvicorn>=0.34"
 ]
 featuregen = [
   "openfe>=0.0.12",

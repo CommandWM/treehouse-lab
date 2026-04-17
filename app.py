@@ -63,17 +63,27 @@ def inject_app_css() -> None:
           --warn: #8a4b2d;
           --ok: #2e684e;
         }
+        [data-testid="stAppViewContainer"] {
+          color-scheme: light dark;
+        }
         .stApp {
           background:
             radial-gradient(circle at top right, rgba(181, 141, 59, 0.08), transparent 26%),
             linear-gradient(180deg, #fbf8f2 0%, #f4efe4 100%);
+        }
+        @media (prefers-color-scheme: dark) {
+          .stApp {
+            background:
+              radial-gradient(circle at top right, rgba(181, 141, 59, 0.09), transparent 24%),
+              linear-gradient(180deg, #172019 0%, #101713 100%);
+          }
         }
         .block-container {
           padding-top: 2rem;
           padding-bottom: 2rem;
         }
         h1, h2, h3 {
-          color: var(--ink);
+          color: inherit;
           letter-spacing: -0.02em;
         }
         .treehouse-hero {
@@ -117,27 +127,27 @@ def inject_app_css() -> None:
           font-size: 0.84rem;
         }
         .guide-card {
-          background: rgba(255, 255, 255, 0.72);
-          border: 1px solid var(--line);
+          background: color-mix(in srgb, var(--background-color, #ffffff) 86%, transparent);
+          border: 1px solid color-mix(in srgb, currentColor 12%, transparent);
           border-radius: 18px;
           padding: 1rem 1rem 0.9rem 1rem;
           min-height: 100%;
           box-shadow: 0 10px 24px rgba(30, 42, 36, 0.05);
         }
         .guide-card h4 {
-          color: var(--ink);
+          color: inherit;
           margin: 0 0 0.45rem 0;
           font-size: 1rem;
         }
         .guide-card p {
-          color: var(--muted);
+          color: color-mix(in srgb, currentColor 72%, transparent);
           margin: 0;
           line-height: 1.5;
           font-size: 0.94rem;
         }
         .blueprint-shell {
-          background: rgba(255, 255, 255, 0.82);
-          border: 1px solid var(--line);
+          background: color-mix(in srgb, var(--background-color, #ffffff) 90%, transparent);
+          border: 1px solid color-mix(in srgb, currentColor 12%, transparent);
           border-radius: 22px;
           padding: 1.1rem;
           box-shadow: 0 16px 36px rgba(30, 42, 36, 0.06);
@@ -152,26 +162,25 @@ def inject_app_css() -> None:
         .blueprint-title {
           font-size: 1.2rem;
           font-weight: 700;
-          color: var(--ink);
+          color: inherit;
           margin-bottom: 0.35rem;
         }
         .blueprint-subtitle {
-          color: var(--muted);
+          color: color-mix(in srgb, currentColor 72%, transparent);
           line-height: 1.5;
           font-size: 0.94rem;
         }
-        .blueprint-stage-row {
-          display: grid;
-          grid-template-columns: repeat(6, minmax(0, 1fr));
-          gap: 0.7rem;
-          align-items: center;
-        }
         .stage-card {
-          background: linear-gradient(180deg, rgba(220, 233, 223, 0.72), rgba(255, 255, 255, 0.95));
-          border: 1px solid var(--line);
+          background: linear-gradient(
+            180deg,
+            color-mix(in srgb, var(--accent-soft) 68%, var(--background-color, #ffffff) 32%),
+            color-mix(in srgb, var(--background-color, #ffffff) 95%, transparent)
+          );
+          border: 1px solid color-mix(in srgb, currentColor 12%, transparent);
           border-radius: 18px;
           padding: 0.85rem;
           min-height: 8.8rem;
+          box-shadow: 0 8px 18px rgba(30, 42, 36, 0.04);
         }
         .stage-label {
           color: var(--gold);
@@ -181,21 +190,15 @@ def inject_app_css() -> None:
           margin-bottom: 0.4rem;
         }
         .stage-name {
-          color: var(--ink);
+          color: inherit;
           font-weight: 700;
           font-size: 0.98rem;
           margin-bottom: 0.45rem;
         }
         .stage-copy {
-          color: var(--muted);
+          color: color-mix(in srgb, currentColor 72%, transparent);
           font-size: 0.88rem;
           line-height: 1.45;
-        }
-        .stage-arrow {
-          color: var(--gold);
-          text-align: center;
-          font-size: 1.4rem;
-          font-weight: 700;
         }
         .signal-strip {
           display: grid;
@@ -205,51 +208,40 @@ def inject_app_css() -> None:
         }
         .signal-card {
           border-radius: 18px;
-          border: 1px solid var(--line);
+          border: 1px solid color-mix(in srgb, currentColor 12%, transparent);
           padding: 0.85rem;
-          background: rgba(255, 255, 255, 0.9);
+          background: color-mix(in srgb, var(--background-color, #ffffff) 92%, transparent);
         }
         .signal-label {
-          color: var(--muted);
+          color: color-mix(in srgb, currentColor 68%, transparent);
           font-size: 0.76rem;
           text-transform: uppercase;
           letter-spacing: 0.12em;
           margin-bottom: 0.35rem;
         }
         .signal-value {
-          color: var(--ink);
+          color: inherit;
           font-size: 1rem;
           font-weight: 700;
           margin-bottom: 0.25rem;
         }
         .signal-copy {
-          color: var(--muted);
+          color: color-mix(in srgb, currentColor 72%, transparent);
           font-size: 0.86rem;
           line-height: 1.4;
         }
         .status-note {
           border-left: 4px solid var(--accent);
           padding: 0.7rem 0.9rem;
-          background: rgba(220, 233, 223, 0.7);
+          background: color-mix(in srgb, var(--accent-soft) 74%, transparent);
           border-radius: 0 12px 12px 0;
-          color: var(--ink);
+          color: inherit;
         }
         .artifact-card {
-          border: 1px solid var(--line);
+          border: 1px solid color-mix(in srgb, currentColor 12%, transparent);
           border-radius: 16px;
           padding: 0.85rem;
-          background: rgba(255,255,255,0.82);
-        }
-        @media (max-width: 1080px) {
-          .blueprint-stage-row {
-            grid-template-columns: 1fr;
-          }
-          .stage-arrow {
-            transform: rotate(90deg);
-          }
-          .signal-strip {
-            grid-template-columns: 1fr 1fr;
-          }
+          background: color-mix(in srgb, var(--background-color, #ffffff) 88%, transparent);
         }
         @media (max-width: 720px) {
           .signal-strip {
@@ -360,31 +352,39 @@ def render_blueprint(config_path: Path, selected_config: object, incumbent: dict
         ("05", "Evaluation gate", "Measure validation, holdout, runtime, and feature budget. Do not touch the held-out test during search."),
         ("06", "Promote or reject", "A run can be benchmark-better and still fail implementation readiness. Keep both labels visible."),
     ]
-
-    blueprint_html_parts = [
-        '<div class="blueprint-shell">',
-        '<div class="blueprint-header">',
-        '<div>',
-        '<div class="blueprint-title">Autoresearch Blueprint</div>',
-        '<div class="blueprint-subtitle">A readable map of the loop, inspired by system-blueprint style docs: explicit inputs, a visible control flow, and plain-language state.</div>',
-        "</div>",
-        f'<div class="meta-pill">selected config: {config_path.name}</div>',
-        "</div>",
-        '<div class="blueprint-stage-row">',
-    ]
-    for label, title, copy in stage_cards:
-        blueprint_html_parts.append(
-            f"""
-            <div class="stage-card">
-              <div class="stage-label">{label}</div>
-              <div class="stage-name">{title}</div>
-              <div class="stage-copy">{copy}</div>
+    st.markdown(
+        f"""
+        <div class="blueprint-shell">
+          <div class="blueprint-header">
+            <div>
+              <div class="blueprint-title">Autoresearch Blueprint</div>
+              <div class="blueprint-subtitle">
+                A readable map of the loop, inspired by system-blueprint style docs: explicit inputs, a visible control flow, and plain-language state.
+              </div>
             </div>
-            """
-        )
-    blueprint_html_parts.append("</div>")
+            <div class="meta-pill">selected config: {config_path.name}</div>
+          </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
-    blueprint_html_parts.append(
+    top_row = st.columns(3)
+    bottom_row = st.columns(3)
+    for column, (label, title, copy) in zip([*top_row, *bottom_row], stage_cards, strict=True):
+        with column:
+            st.markdown(
+                f"""
+                <div class="stage-card">
+                  <div class="stage-label">{label}</div>
+                  <div class="stage-name">{title}</div>
+                  <div class="stage-copy">{copy}</div>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+
+    st.markdown(
         f"""
         <div class="signal-strip">
           <div class="signal-card">
@@ -408,10 +408,9 @@ def render_blueprint(config_path: Path, selected_config: object, incumbent: dict
             <div class="signal-copy">The next bounded move suggested by diagnosis-aware proposal selection.</div>
           </div>
         </div>
-        """
+        """,
+        unsafe_allow_html=True,
     )
-    blueprint_html_parts.append("</div>")
-    st.markdown("".join(blueprint_html_parts), unsafe_allow_html=True)
 
     st.markdown("#### Current state notes")
     notes = []

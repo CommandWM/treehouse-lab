@@ -6,6 +6,8 @@
 
 Treehouse Lab is a Karpathy-style autoresearch loop for tabular machine learning.
 
+Current checkpoint: `v0.8`. The research engine, benchmark pack, diagnosis layer, and React UI surface are in place, but dataset-intake assessment and broader user-facing onboarding still need to mature before a `v1` label would be justified.
+
 The idea is simple: give an agent a constrained playground around XGBoost-style models, let it propose experiments, run them safely, keep only the winners, and leave behind a readable research log instead of a pile of notebook debris.
 
 ## Why this exists
@@ -106,13 +108,30 @@ Benchmark-pack loop check:
 treehouse-lab loop configs/datasets/implementation_churn.yaml --steps 3
 ```
 
-Run the demo interface:
+Run the legacy Streamlit demo interface:
 
 ```bash
 streamlit run app.py
 ```
 
 The Streamlit surface is now meant to teach the loop as well as operate it: a guided blueprint view, current diagnosis/proposal summary, and an in-app glossary mirror the underlying run artifacts.
+
+Run the React UI instead:
+
+```bash
+pip install -e '.[web]'
+treehouse-lab-api
+```
+
+In a second terminal:
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+The React UI is the preferred path for the richer guided interface. Streamlit can remain as a lightweight fallback while the React surface evolves.
 
 If your local XGBoost install cannot load, for example because `libomp` is missing on macOS, the runner falls back to sklearn gradient boosting so the examples remain runnable.
 
@@ -141,6 +160,21 @@ Examples are bundled so the repo is usable offline:
 This keeps the onboarding path self-contained while the benchmark pack evolves.
 
 The benchmark pack is documented in [docs/benchmarks.md](docs/benchmarks.md), the readiness criteria are documented in [docs/evaluation-policy.md](docs/evaluation-policy.md), and the core terms are collected in [docs/glossary.md](docs/glossary.md).
+
+## UI Architecture
+
+The Python research engine remains the source of truth:
+
+- dataset configs in `configs/datasets/`
+- incumbents and journal entries in `runs/`
+- runner, diagnosis, and loop logic in `src/treehouse_lab/`
+
+The React UI is a separate presentation layer:
+
+- a thin FastAPI layer in `src/treehouse_lab/api.py`
+- a Vite React client in `frontend/`
+
+That split is deliberate. It keeps the Python loop stable while making the teaching surface easier to control and extend.
 
 ## How the loop works
 
