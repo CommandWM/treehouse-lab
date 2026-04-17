@@ -1,0 +1,139 @@
+- generic [ref=e2]:
+  - generic [ref=e11]:
+    - generic [ref=e13]:
+      - paragraph [ref=e17]: Example
+      - generic [ref=e19]:
+        - generic [ref=e20]:
+          - generic [ref=e21]: Breast Cancer
+          - combobox "Selected Breast Cancer. Example" [ref=e23]
+        - img "open" [ref=e25]
+    - heading "Why Streamlit" [level=3] [ref=e31]
+    - paragraph [ref=e36]: "Treehouse Lab benefits from a lightweight dashboard: config inspection, one-click runs, comparison against the incumbent, and a readable run journal."
+    - paragraph [ref=e41]: The runner prefers XGBoost and falls back to sklearn gradient boosting if the local XGBoost runtime is unavailable.
+  - generic [ref=e3]:
+    - banner [ref=e44]:
+      - generic [ref=e47]:
+        - button "Deploy" [ref=e49] [cursor=pointer]:
+          - generic [ref=e51]: Deploy
+        - button "Main menu" [ref=e53] [cursor=pointer]:
+          - img [ref=e54]
+    - generic [ref=e57]:
+      - heading "Treehouse Lab" [level=1] [ref=e62]:
+        - text: Treehouse Lab
+        - generic [ref=e63]:
+          - link "Link to heading":
+            - /url: "#treehouse-lab"
+            - img
+      - paragraph [ref=e68]: Disciplined tabular autoresearch with explicit guardrails, readable artifacts, and bounded experiment mutations.
+      - generic [ref=e70]:
+        - tablist [ref=e72]:
+          - tab "Overview" [ref=e73] [cursor=pointer]:
+            - paragraph [ref=e75]: Overview
+          - tab "Baseline" [ref=e76] [cursor=pointer]:
+            - paragraph [ref=e78]: Baseline
+          - tab "Candidate" [active] [selected] [ref=e79] [cursor=pointer]:
+            - paragraph [ref=e81]: Candidate
+          - tab "Journal" [ref=e82] [cursor=pointer]:
+            - paragraph [ref=e84]: Journal
+        - tabpanel "Candidate" [ref=e173]:
+          - generic [ref=e174]:
+            - heading "Run one bounded mutation" [level=3] [ref=e179]:
+              - text: Run one bounded mutation
+              - generic [ref=e180]:
+                - link "Link to heading":
+                  - /url: "#run-one-bounded-mutation"
+                  - img
+            - paragraph [ref=e185]: This is intentionally not free-form. You tweak a few parameters inside the declared search space and compare against the incumbent.
+            - generic [ref=e187]:
+              - generic [ref=e189]:
+                - generic [ref=e192]:
+                  - paragraph [ref=e196]: n_estimators
+                  - generic [ref=e197]:
+                    - slider "n_estimators" [ref=e201]:
+                      - generic:
+                        - generic:
+                          - paragraph: "240"
+                    - generic:
+                      - generic:
+                        - paragraph: "200"
+                      - generic:
+                        - paragraph: "1200"
+                - generic [ref=e205]:
+                  - paragraph [ref=e209]: min_child_weight
+                  - generic [ref=e210]:
+                    - slider "min_child_weight" [ref=e214]:
+                      - generic:
+                        - generic:
+                          - paragraph: "1"
+                    - generic:
+                      - generic:
+                        - paragraph: "1"
+                      - generic:
+                        - paragraph: "12"
+              - generic [ref=e217]:
+                - generic [ref=e220]:
+                  - paragraph [ref=e224]: max_depth
+                  - generic [ref=e225]:
+                    - slider "max_depth" [ref=e229]:
+                      - generic:
+                        - generic:
+                          - paragraph: "4"
+                    - generic:
+                      - generic:
+                        - paragraph: "3"
+                      - generic:
+                        - paragraph: "10"
+                - generic [ref=e233]:
+                  - paragraph [ref=e237]: subsample
+                  - generic [ref=e238]:
+                    - slider "subsample" [ref=e242]:
+                      - generic:
+                        - generic:
+                          - paragraph: "0.95"
+                    - generic:
+                      - generic:
+                        - paragraph: "0.50"
+                      - generic:
+                        - paragraph: "1.00"
+              - generic [ref=e245]:
+                - generic [ref=e248]:
+                  - paragraph [ref=e252]: learning_rate
+                  - generic [ref=e253]:
+                    - slider "learning_rate" [ref=e257]:
+                      - generic:
+                        - generic:
+                          - paragraph: "0.05"
+                    - generic:
+                      - generic:
+                        - paragraph: "0.01"
+                      - generic:
+                        - paragraph: "0.30"
+                - generic [ref=e261]:
+                  - paragraph [ref=e265]: colsample_bytree
+                  - generic [ref=e266]:
+                    - slider "colsample_bytree" [ref=e270]:
+                      - generic:
+                        - generic:
+                          - paragraph: "0.80"
+                    - generic:
+                      - generic:
+                        - paragraph: "0.50"
+                      - generic:
+                        - paragraph: "1.00"
+            - generic [ref=e273]:
+              - paragraph [ref=e277]: Mutation name
+              - textbox "Mutation name" [ref=e280]:
+                - /placeholder: ""
+                - text: candidate-tune
+            - generic [ref=e282]:
+              - paragraph [ref=e286]: Hypothesis
+              - textbox "Hypothesis" [ref=e289]:
+                - /placeholder: ""
+                - text: A smaller, better-regularized tree ensemble should improve validation ROC AUC without making the run harder to explain.
+            - button "Run Candidate" [ref=e292] [cursor=pointer]:
+              - paragraph [ref=e296]: Run Candidate
+      - separator [ref=e166]
+      - paragraph [ref=e171]:
+        - text: Artifacts and the incumbent registry live under
+        - code [ref=e172]: runs/
+        - text: . The current UI is a teaching surface for the MVP, not the final research loop.

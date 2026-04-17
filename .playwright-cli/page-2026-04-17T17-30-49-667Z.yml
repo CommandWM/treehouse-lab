@@ -1,0 +1,72 @@
+- generic [ref=e2]:
+  - generic [ref=e11]:
+    - generic [ref=e13]:
+      - paragraph [ref=e17]: Example
+      - generic [ref=e19]:
+        - generic [ref=e20]:
+          - generic [ref=e21]: Churn Demo
+          - combobox "Selected Churn Demo. Example" [ref=e387]
+        - img "open" [ref=e25]
+    - heading "Why Streamlit" [level=3] [ref=e31]
+    - paragraph [ref=e36]: "Treehouse Lab benefits from a lightweight dashboard: config inspection, one-click runs, comparison against the incumbent, and a readable run journal."
+    - paragraph [ref=e41]: The runner prefers XGBoost and falls back to sklearn gradient boosting if the local XGBoost runtime is unavailable.
+  - generic [ref=e3]:
+    - banner [ref=e44]:
+      - generic [ref=e47]:
+        - button "Deploy" [ref=e49] [cursor=pointer]:
+          - generic [ref=e51]: Deploy
+        - button "Main menu" [ref=e53] [cursor=pointer]:
+          - img [ref=e54]
+    - generic [ref=e57]:
+      - heading "Treehouse Lab" [level=1] [ref=e62]:
+        - text: Treehouse Lab
+        - generic [ref=e63]:
+          - link "Link to heading":
+            - /url: "#treehouse-lab"
+            - img
+      - paragraph [ref=e68]: Disciplined tabular autoresearch with explicit guardrails, readable artifacts, and bounded experiment mutations.
+      - generic [ref=e70]:
+        - tablist [ref=e72]:
+          - tab "Overview" [ref=e73] [cursor=pointer]:
+            - paragraph [ref=e75]: Overview
+          - tab "Baseline" [ref=e76] [cursor=pointer]:
+            - paragraph [ref=e78]: Baseline
+          - tab "Candidate" [ref=e79] [cursor=pointer]:
+            - paragraph [ref=e81]: Candidate
+          - tab "Journal" [active] [selected] [ref=e82] [cursor=pointer]:
+            - paragraph [ref=e84]: Journal
+        - tabpanel "Journal" [ref=e466]:
+          - generic [ref=e467]:
+            - heading "Run journal" [level=3] [ref=e472]:
+              - text: Run journal
+              - generic [ref=e473]:
+                - link "Link to heading":
+                  - /url: "#run-journal"
+                  - img
+            - generic [ref=e478]:
+              - button "Show/hide columns" [ref=e482] [cursor=pointer]:
+                - img [ref=e483]
+              - button "Download as CSV" [ref=e488] [cursor=pointer]:
+                - img [ref=e489]
+              - button "Search" [ref=e494] [cursor=pointer]:
+                - img [ref=e495]
+              - button "Fullscreen" [ref=e500] [cursor=pointer]:
+                - img [ref=e501]
+            - generic [ref=e513]:
+              - paragraph [ref=e517]: Inspect run
+              - generic [ref=e519]:
+                - generic [ref=e520]:
+                  - generic [ref=e521]: 20260417T172957892169Z-candidate-tune
+                  - combobox "Selected 20260417T172957892169Z-candidate-tune. Inspect run" [ref=e523]
+                - img "open" [ref=e525]
+            - generic [ref=e532]:
+              - generic [ref=e534] [cursor=pointer]:
+                - img [ref=e537]
+                - generic [ref=e539]: "{"
+              - generic [ref=e540] [cursor=pointer]: ...
+              - generic [ref=e542] [cursor=pointer]: "}"
+      - separator [ref=e166]
+      - paragraph [ref=e171]:
+        - text: Artifacts and the incumbent registry live under
+        - code [ref=e172]: runs/
+        - text: . The current UI is a teaching surface for the MVP, not the final research loop.

@@ -107,7 +107,7 @@ with overview_tab:
 with baseline_tab:
     st.subheader("Run the baseline")
     st.write("This uses the configured dataset spec and model defaults, then writes artifacts into `runs/`.")
-    if st.button("Run Baseline", type="primary", use_container_width=True):
+    if st.button("Run Baseline", type="primary", width="stretch"):
         run_and_render_baseline(selected_spec)
     if "last_result" in st.session_state:
         st.markdown("#### Latest result")
@@ -169,14 +169,14 @@ with candidate_tab:
         "Hypothesis",
         value="A smaller, better-regularized tree ensemble should improve validation ROC AUC without making the run harder to explain.",
     )
-    if st.button("Run Candidate", use_container_width=True):
+    if st.button("Run Candidate", width="stretch"):
         run_and_render_candidate(selected_spec, mutation_name, hypothesis, overrides)
 
 with journal_tab:
     st.subheader("Run journal")
     if journal_entries:
         journal_frame = pd.DataFrame(journal_entries).sort_values("run_id", ascending=False)
-        st.dataframe(journal_frame, use_container_width=True)
+        st.dataframe(journal_frame, width="stretch")
         selected_run = st.selectbox("Inspect run", journal_frame["run_id"])
         selected_entry = next(entry for entry in journal_entries if entry["run_id"] == selected_run)
         st.json(selected_entry, expanded=False)
