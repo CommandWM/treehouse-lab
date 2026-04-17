@@ -4,6 +4,7 @@ import argparse
 import json
 from pathlib import Path
 
+from treehouse_lab.loop import AutonomousLoopController
 from treehouse_lab.runner import TreehouseLabRunner
 
 
@@ -26,6 +27,13 @@ def build_parser() -> argparse.ArgumentParser:
         help="Override model params, for example --set max_depth=4 learning_rate=0.08",
     )
     candidate_parser.add_argument("--hypothesis", default="", help="Short experiment hypothesis.")
+
+    propose_parser = subparsers.add_parser("propose", help="Show the next bounded experiment proposal without executing it.")
+    propose_parser.add_argument("config", type=Path, help="Path to the dataset config YAML.")
+
+    loop_parser = subparsers.add_parser("loop", help="Run the bounded autonomous research loop.")
+    loop_parser.add_argument("config", type=Path, help="Path to the dataset config YAML.")
+    loop_parser.add_argument("--steps", type=int, default=3, help="Maximum number of bounded loop steps to run.")
 
     return parser
 
@@ -56,18 +64,28 @@ def parse_value(value: str) -> object:
 def main() -> None:
     parser = build_parser()
     args = parser.parse_args()
-    runner = TreehouseLabRunner(args.config)
-
     if args.command == "baseline":
+        runner = TreehouseLabRunner(args.config)
         result = runner.run_baseline()
-    else:
+    elif args.command == "candidate":
+        runner = TreehouseLabRunner(args.config)
         result = runner.run_candidate(
             mutation_name=args.name,
             overrides=parse_override_items(args.overrides),
             hypothesis=args.hypothesis or None,
         )
+    elif args.command == "propose":
+        controller = AutonomousLoopController(args.config)
+        result = controller.next_proposal().to_dict()
+    else:
+        controller = AutonomousLoopController(args.config)
+        result = controller.run_loop(max_steps=args.steps).to_dict()
 
-    print(json.dumps(result.to_dict(), indent=2, sort_keys=True))
+    if hasattr(result, "to_dict"):
+        payload = result.to_dict()
+    else:
+        payload = result
+    print(json.dumps(payload, indent=2, sort_keys=True))
 
 
 if __name__ == "__main__":

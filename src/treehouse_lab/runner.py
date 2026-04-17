@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import shutil
 import time
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -70,6 +70,7 @@ class ExperimentResult:
     metrics: dict[str, float]
     split_summary: dict[str, float | int]
     comparison_to_incumbent: dict[str, Any]
+    metadata: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -84,11 +85,12 @@ class TreehouseLabRunner:
         self.config = load_experiment_config(self.config_path)
         self.registry_key = self.config_path.stem
 
-    def run_baseline(self) -> ExperimentResult:
+    def run_baseline(self, metadata: dict[str, Any] | None = None) -> ExperimentResult:
         return self._run_experiment(
             mutation_name="baseline",
             overrides={},
             hypothesis=self.config.hypothesis,
+            metadata=metadata,
         )
 
     def run_candidate(
@@ -96,12 +98,16 @@ class TreehouseLabRunner:
         mutation_name: str,
         overrides: dict[str, Any],
         hypothesis: str | None = None,
+        metadata: dict[str, Any] | None = None,
+        base_params: dict[str, Any] | None = None,
     ) -> ExperimentResult:
         candidate_hypothesis = hypothesis or "A bounded parameter mutation can outperform the incumbent."
         return self._run_experiment(
             mutation_name=mutation_name,
             overrides=overrides,
             hypothesis=candidate_hypothesis,
+            metadata=metadata,
+            base_params=base_params,
         )
 
     def _run_experiment(
@@ -109,11 +115,13 @@ class TreehouseLabRunner:
         mutation_name: str,
         overrides: dict[str, Any],
         hypothesis: str,
+        metadata: dict[str, Any] | None,
+        base_params: dict[str, Any] | None = None,
     ) -> ExperimentResult:
         run_started = time.perf_counter()
         dataset = load_dataset(self.config, self.project_root)
         split = split_dataset(dataset, self.config)
-        params = self._resolve_model_params(overrides)
+        params = self._resolve_model_params(overrides, base_params=base_params)
         model, backend = self._build_model(params)
         model.fit(split.X_train, split.y_train)
 
@@ -138,8 +146,18 @@ class TreehouseLabRunner:
             promoted=promoted,
             comparison=comparison,
             decision_reason=decision_reason,
+            metadata=metadata or {},
         )
-        self._log_mlflow_if_available(run_id, mutation_name, backend, params, metrics, promoted, artifact_dir)
+        self._log_mlflow_if_available(
+            run_id,
+            mutation_name,
+            backend,
+            params,
+            metrics,
+            promoted,
+            artifact_dir,
+            metadata or {},
+        )
 
         result = ExperimentResult(
             name=mutation_name,
@@ -157,13 +175,17 @@ class TreehouseLabRunner:
             metrics=metrics,
             split_summary=split.summary(),
             comparison_to_incumbent=comparison,
+            metadata=metadata or {},
         )
         self._record_journal(result)
         return result
 
-    def _resolve_model_params(self, overrides: dict[str, Any]) -> dict[str, Any]:
+    def _resolve_model_params(self, overrides: dict[str, Any], base_params: dict[str, Any] | None = None) -> dict[str, Any]:
         params = dict(DEFAULT_MODEL_PARAMS)
-        params.update(self.config.model.params)
+        if base_params:
+            params.update(base_params)
+        else:
+            params.update(self.config.model.params)
         params["random_state"] = self.config.seed
         params.update(overrides)
         return params
@@ -237,11 +259,13 @@ class TreehouseLabRunner:
         promoted: bool,
         comparison: dict[str, Any],
         decision_reason: str,
+        metadata: dict[str, Any],
     ) -> None:
         normalized_config_path = artifact_dir / "config_snapshot.json"
         metrics_path = artifact_dir / "metrics.json"
         split_path = artifact_dir / "split_summary.json"
         params_path = artifact_dir / "model_params.json"
+        context_path = artifact_dir / "run_context.json"
         summary_path = artifact_dir / "summary.md"
         importances_path = artifact_dir / "feature_importances.csv"
         original_config_path = artifact_dir / self.config_path.name
@@ -251,6 +275,7 @@ class TreehouseLabRunner:
         metrics_path.write_text(json.dumps(metrics, indent=2, sort_keys=True), encoding="utf-8")
         split_path.write_text(json.dumps(split.summary(), indent=2, sort_keys=True), encoding="utf-8")
         params_path.write_text(json.dumps(params, indent=2, sort_keys=True), encoding="utf-8")
+        context_path.write_text(json.dumps(metadata, indent=2, sort_keys=True), encoding="utf-8")
 
         importance_frame = pd.DataFrame(
             {
@@ -272,6 +297,7 @@ class TreehouseLabRunner:
                 promoted=promoted,
                 comparison=comparison,
                 decision_reason=decision_reason,
+                metadata=metadata,
             ),
             encoding="utf-8",
         )
@@ -287,6 +313,9 @@ class TreehouseLabRunner:
                     "artifact_dir": str(artifact_dir),
                     "config_path": str(self.config_path),
                     "registry_key": self.registry_key,
+                    "params": params,
+                    "backend": backend,
+                    "metrics": metrics,
                 },
             )
 
@@ -302,19 +331,31 @@ class TreehouseLabRunner:
         promoted: bool,
         comparison: dict[str, Any],
         decision_reason: str,
+        metadata: dict[str, Any],
     ) -> str:
-        return "\n".join(
+        lines = [
+            f"# {mutation_name}",
+            "",
+            f"- run_id: `{run_id}`",
+            f"- hypothesis: {hypothesis}",
+            f"- backend: `{backend}`",
+            f"- primary_metric: `{self.config.primary_metric}`",
+            f"- validation_{self.config.primary_metric}: `{metrics[self.config.primary_metric]:.4f}`",
+            f"- runtime_seconds: `{runtime_seconds:.2f}`",
+            f"- decision: `{'promote' if promoted else 'reject'}`",
+            f"- explanation: {decision_reason}",
+        ]
+        if metadata:
+            lines.extend(
+                [
+                    "",
+                    "## Run context",
+                    "",
+                    *(f"- {key}: `{value}`" for key, value in metadata.items() if not isinstance(value, (dict, list))),
+                ]
+            )
+        lines.extend(
             [
-                f"# {mutation_name}",
-                "",
-                f"- run_id: `{run_id}`",
-                f"- hypothesis: {hypothesis}",
-                f"- backend: `{backend}`",
-                f"- primary_metric: `{self.config.primary_metric}`",
-                f"- validation_{self.config.primary_metric}: `{metrics[self.config.primary_metric]:.4f}`",
-                f"- runtime_seconds: `{runtime_seconds:.2f}`",
-                f"- decision: `{'promote' if promoted else 'reject'}`",
-                f"- explanation: {decision_reason}",
                 "",
                 "## Split summary",
                 "",
@@ -325,6 +366,7 @@ class TreehouseLabRunner:
                 *(f"- {key}: `{value}`" for key, value in comparison.items()),
             ]
         )
+        return "\n".join(lines)
 
     def _record_journal(self, result: ExperimentResult) -> None:
         append_journal_entry(self.project_root, result.to_dict())
@@ -338,6 +380,7 @@ class TreehouseLabRunner:
         metrics: dict[str, float],
         promoted: bool,
         artifact_dir: Path,
+        metadata: dict[str, Any],
     ) -> None:
         if mlflow is None:
             return
@@ -348,6 +391,10 @@ class TreehouseLabRunner:
             mlflow.set_tag("treehouse_lab.run_id", run_id)
             mlflow.set_tag("treehouse_lab.promoted", str(promoted).lower())
             mlflow.set_tag("treehouse_lab.backend", backend)
+            if "proposal_id" in metadata:
+                mlflow.set_tag("treehouse_lab.proposal_id", str(metadata["proposal_id"]))
+            if "mutation_type" in metadata:
+                mlflow.set_tag("treehouse_lab.mutation_type", str(metadata["mutation_type"]))
             if XGBOOST_IMPORT_ERROR is not None:
                 mlflow.set_tag("treehouse_lab.xgboost_fallback", type(XGBOOST_IMPORT_ERROR).__name__)
             mlflow.log_artifacts(str(artifact_dir))

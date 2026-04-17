@@ -129,6 +129,7 @@ That is the product.
 ## MVP milestones
 
 See [docs/mvp.md](docs/mvp.md) for the build plan.
+See [docs/autonomous-loop.md](docs/autonomous-loop.md) for the next implementation phase.
 
 ## Name
 
