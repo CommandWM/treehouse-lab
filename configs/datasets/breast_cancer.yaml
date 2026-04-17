@@ -1,0 +1,26 @@
+dataset:
+  source:
+    kind: sklearn_breast_cancer
+    name: Breast Cancer Wisconsin Diagnostic
+  split:
+    validation_size: 0.2
+    test_size: 0.2
+    stratify: true
+
+experiment:
+  name: breast-cancer-baseline
+  description: Real offline-ready binary classification example using sklearn's breast cancer dataset.
+  primary_metric: roc_auc
+  promote_if_delta_at_least: 0.002
+  max_runtime_minutes: 10
+  seed: 42
+  baseline_hypothesis: A constrained XGBoost baseline should deliver a strong, easy-to-explain benchmark on a clean public dataset.
+
+model:
+  params:
+    n_estimators: 240
+    max_depth: 4
+    learning_rate: 0.05
+    min_child_weight: 1
+    subsample: 0.95
+    colsample_bytree: 0.8

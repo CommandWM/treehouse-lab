@@ -9,7 +9,10 @@ venv/
 .ruff_cache/
 .mypy_cache/
 mlruns/
+mlflow.db
+runs/
 artifacts/
 data/
 outputs/
 *.log
+*.egg-info/

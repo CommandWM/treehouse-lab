@@ -1,0 +1,29 @@
+dataset:
+  source:
+    kind: synthetic_churn_demo
+    name: Churn Demo
+    target_column: churned
+    rows: 1400
+    random_state: 42
+  split:
+    validation_size: 0.2
+    test_size: 0.2
+    stratify: true
+
+experiment:
+  name: churn-demo-baseline
+  description: Synthetic business-style churn example with mixed numeric and categorical features.
+  primary_metric: roc_auc
+  promote_if_delta_at_least: 0.003
+  max_runtime_minutes: 10
+  seed: 42
+  baseline_hypothesis: A disciplined baseline should capture clear churn drivers without feature-generation theatrics.
+
+model:
+  params:
+    n_estimators: 320
+    max_depth: 5
+    learning_rate: 0.06
+    min_child_weight: 2
+    subsample: 0.9
+    colsample_bytree: 0.9

@@ -51,6 +51,49 @@ Later versions can add LightGBM, CatBoost, time series, richer feature stores, a
 6. Log the result, rationale, diff, and artifacts.
 7. Repeat.
 
+## Current repo status
+
+This repository now includes a runnable MVP slice:
+
+- dataset specs in `configs/datasets/`
+- a baseline and bounded-candidate runner in `src/treehouse_lab/`
+- local artifact bundles and an incumbent registry under `runs/`
+- a Streamlit demo UI in `app.py`
+
+The full autoresearch loop is still in progress, but the baseline path is no longer just a placeholder.
+
+## Quickstart
+
+Install the package and the Streamlit UI extra:
+
+```bash
+pip install -e '.[ui]'
+```
+
+Run one of the example baselines from the CLI:
+
+```bash
+treehouse-lab baseline configs/datasets/breast_cancer.yaml
+treehouse-lab baseline configs/datasets/churn_demo.yaml
+```
+
+Run the demo interface:
+
+```bash
+streamlit run app.py
+```
+
+If your local XGBoost install cannot load, for example because `libomp` is missing on macOS, the runner falls back to sklearn gradient boosting so the examples remain runnable.
+
+## Included examples
+
+Two examples are bundled so the repo is usable offline:
+
+- `breast_cancer.yaml`: a real binary classification dataset via sklearn
+- `churn_demo.yaml`: a synthetic business-style churn example with mixed feature types
+
+This keeps the onboarding path self-contained while the public benchmark examples evolve.
+
 ## Proposed architecture
 
 - `datasets/` dataset specs and split policies
