@@ -112,6 +112,8 @@ Run the demo interface:
 streamlit run app.py
 ```
 
+The Streamlit surface is now meant to teach the loop as well as operate it: a guided blueprint view, current diagnosis/proposal summary, and an in-app glossary mirror the underlying run artifacts.
+
 If your local XGBoost install cannot load, for example because `libomp` is missing on macOS, the runner falls back to sklearn gradient boosting so the examples remain runnable.
 
 ## CLI commands
@@ -138,7 +140,7 @@ Examples are bundled so the repo is usable offline:
 
 This keeps the onboarding path self-contained while the benchmark pack evolves.
 
-The benchmark pack is documented in [docs/benchmarks.md](docs/benchmarks.md), and the readiness criteria are documented in [docs/evaluation-policy.md](docs/evaluation-policy.md).
+The benchmark pack is documented in [docs/benchmarks.md](docs/benchmarks.md), the readiness criteria are documented in [docs/evaluation-policy.md](docs/evaluation-policy.md), and the core terms are collected in [docs/glossary.md](docs/glossary.md).
 
 ## How the loop works
 
