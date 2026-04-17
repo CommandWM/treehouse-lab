@@ -1,0 +1,43 @@
+dataset:
+  source:
+    kind: synthetic_churn_demo
+    name: Stress Churn
+    target_column: churned
+    variant: stress
+    rows: 2200
+    random_state: 42
+  split:
+    validation_size: 0.2
+    test_size: 0.2
+    stratify: true
+
+benchmark:
+  pack: v1
+  profile: stress
+  objective: Test whether the loop remains disciplined on missing values, rare categories, weak-signal columns, and mild label noise.
+
+evaluation_policy:
+  minimum_primary_metric: 0.80
+  max_train_validation_gap: 0.06
+  max_validation_test_gap: 0.05
+  max_runtime_seconds: 45
+  max_feature_count: 32
+  require_promotion_for_readiness: true
+
+experiment:
+  name: stress-churn-baseline
+  description: Messier business-style benchmark with missingness, rare categories, and light label noise.
+  primary_metric: roc_auc
+  promote_if_delta_at_least: 0.003
+  max_runtime_minutes: 10
+  seed: 42
+  baseline_hypothesis: A disciplined baseline should remain competitive on messy tabular data without broad feature-engineering detours.
+
+model:
+  params:
+    n_estimators: 320
+    max_depth: 5
+    learning_rate: 0.05
+    min_child_weight: 2
+    subsample: 0.9
+    colsample_bytree: 0.85

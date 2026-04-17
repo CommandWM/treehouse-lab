@@ -61,6 +61,7 @@ This repository now includes a real runnable slice:
 - local artifact bundles and an incumbent registry under `runs/`
 - loop summaries under `runs/loops/`
 - a Streamlit demo UI in `app.py`
+- benchmark-pack configs for smoke, stress, and implementation-like evaluation
 
 This is still an MVP, but it is no longer just scaffolding. You can now establish incumbents, inspect the next bounded proposal, run a short autonomous loop, and review the resulting narratives and artifacts.
 
@@ -79,6 +80,14 @@ treehouse-lab baseline configs/datasets/breast_cancer.yaml
 treehouse-lab baseline configs/datasets/churn_demo.yaml
 ```
 
+Run the v1 benchmark pack:
+
+```bash
+treehouse-lab baseline configs/datasets/smoke_breast_cancer.yaml
+treehouse-lab baseline configs/datasets/stress_churn.yaml
+treehouse-lab baseline configs/datasets/implementation_churn.yaml
+```
+
 Preview the next bounded experiment without executing it:
 
 ```bash
@@ -89,6 +98,12 @@ Run the bounded autonomous loop:
 
 ```bash
 treehouse-lab loop configs/datasets/churn_demo.yaml --steps 3
+```
+
+Benchmark-pack loop check:
+
+```bash
+treehouse-lab loop configs/datasets/implementation_churn.yaml --steps 3
 ```
 
 Run the demo interface:
@@ -112,12 +127,17 @@ The important distinction is that `propose` and `loop` do not freestyle. They op
 
 ## Included examples
 
-Two examples are bundled so the repo is usable offline:
+Examples are bundled so the repo is usable offline:
 
 - `breast_cancer.yaml`: a real binary classification dataset via sklearn
 - `churn_demo.yaml`: a synthetic business-style churn example with mixed feature types
+- `smoke_breast_cancer.yaml`: a clean benchmark-pack smoke test
+- `stress_churn.yaml`: a messier benchmark-pack stress test
+- `implementation_churn.yaml`: a benchmark-pack implementation-like test
 
-This keeps the onboarding path self-contained while the public benchmark examples evolve.
+This keeps the onboarding path self-contained while the benchmark pack evolves.
+
+The benchmark pack is documented in [docs/benchmarks.md](docs/benchmarks.md), and the readiness criteria are documented in [docs/evaluation-policy.md](docs/evaluation-policy.md).
 
 ## How the loop works
 

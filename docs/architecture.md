@@ -24,6 +24,7 @@ Responsible for:
 - enforcing reproducibility
 - checking runtime budget
 - comparing to incumbent
+- labeling implementation readiness separately from benchmark wins
 
 ### 4. Mutation engine
 For MVP, mutations should be templates rather than free-form code surgery:
@@ -38,6 +39,7 @@ Stores:
 - score
 - run id
 - promotion history
+- latest readiness assessment
 
 ### 6. Journal
 Each run should capture:
@@ -46,6 +48,7 @@ Each run should capture:
 - metrics
 - artifacts
 - promote or reject decision
+- implementation-ready or not-ready decision
 - human-readable explanation
 
 ## Guiding constraint

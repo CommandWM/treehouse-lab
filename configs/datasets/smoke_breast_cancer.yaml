@@ -1,0 +1,39 @@
+dataset:
+  source:
+    kind: sklearn_breast_cancer
+    name: Breast Cancer Wisconsin Diagnostic
+  split:
+    validation_size: 0.2
+    test_size: 0.2
+    stratify: true
+
+benchmark:
+  pack: v1
+  profile: smoke
+  objective: Confirm the baseline runner, promotion logic, and artifact trail work on a clean public binary classification task.
+
+evaluation_policy:
+  minimum_primary_metric: 0.96
+  max_train_validation_gap: 0.03
+  max_validation_test_gap: 0.03
+  max_runtime_seconds: 30
+  max_feature_count: 40
+  require_promotion_for_readiness: true
+
+experiment:
+  name: smoke-breast-cancer-baseline
+  description: Clean public smoke benchmark for proving the Treehouse Lab loop works end to end.
+  primary_metric: roc_auc
+  promote_if_delta_at_least: 0.002
+  max_runtime_minutes: 10
+  seed: 42
+  baseline_hypothesis: A disciplined XGBoost baseline should establish a strong, stable incumbent on a clean public benchmark before harder datasets are attempted.
+
+model:
+  params:
+    n_estimators: 240
+    max_depth: 4
+    learning_rate: 0.05
+    min_child_weight: 1
+    subsample: 0.95
+    colsample_bytree: 0.8

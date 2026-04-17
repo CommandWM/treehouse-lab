@@ -53,13 +53,13 @@ Exit criteria:
 ## Phase 5: Shareability
 
 Deliverables:
-- one public benchmark dataset example
+- benchmark pack with smoke, stress, and implementation-like examples
 - clean README walkthrough
 - reproducible quickstart
 - screenshots or sample experiment logs
 
 Exit criteria:
-- someone can clone the repo and understand why it exists in under ten minutes
+- someone can clone the repo, run the benchmark pack, and understand the promote-vs-ready distinction in under ten minutes
 
 ## Non-goals for v1
 

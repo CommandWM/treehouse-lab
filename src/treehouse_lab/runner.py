@@ -14,6 +14,7 @@ from sklearn.metrics import accuracy_score, log_loss, roc_auc_score
 
 from treehouse_lab.config import load_experiment_config
 from treehouse_lab.datasets import DatasetSplit, load_dataset, split_dataset
+from treehouse_lab.evaluation import assess_run
 from treehouse_lab.journal import (
     append_journal_entry,
     ensure_run_directories,
@@ -70,6 +71,7 @@ class ExperimentResult:
     metrics: dict[str, float]
     split_summary: dict[str, float | int]
     comparison_to_incumbent: dict[str, Any]
+    assessment: dict[str, Any]
     metadata: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
@@ -128,6 +130,15 @@ class TreehouseLabRunner:
         metrics = self._compute_metrics(model, split)
         runtime_seconds = time.perf_counter() - run_started
         promoted, comparison, decision_reason = self._promotion_decision(metrics[self.config.primary_metric])
+        split_summary = split.summary()
+        assessment = assess_run(
+            self.config,
+            metrics=metrics,
+            split_summary=split_summary,
+            runtime_seconds=runtime_seconds,
+            comparison=comparison,
+            promoted=promoted,
+        )
 
         run_id = self._build_run_id(mutation_name)
         artifact_dir = ensure_run_directories(self.project_root) / run_id
@@ -139,13 +150,15 @@ class TreehouseLabRunner:
             hypothesis=hypothesis,
             params=params,
             metrics=metrics,
-            split=split,
+            split_summary=split_summary,
+            feature_names=list(split.X_train.columns),
             model=model,
             backend=backend,
             runtime_seconds=runtime_seconds,
             promoted=promoted,
             comparison=comparison,
             decision_reason=decision_reason,
+            assessment=assessment.to_dict(),
             metadata=metadata or {},
         )
         self._log_mlflow_if_available(
@@ -173,8 +186,9 @@ class TreehouseLabRunner:
             runtime_seconds=runtime_seconds,
             params=params,
             metrics=metrics,
-            split_summary=split.summary(),
+            split_summary=split_summary,
             comparison_to_incumbent=comparison,
+            assessment=assessment.to_dict(),
             metadata=metadata or {},
         )
         self._record_journal(result)
@@ -252,13 +266,15 @@ class TreehouseLabRunner:
         hypothesis: str,
         params: dict[str, Any],
         metrics: dict[str, float],
-        split: DatasetSplit,
+        split_summary: dict[str, float | int],
+        feature_names: list[str],
         model: Any,
         backend: str,
         runtime_seconds: float,
         promoted: bool,
         comparison: dict[str, Any],
         decision_reason: str,
+        assessment: dict[str, Any],
         metadata: dict[str, Any],
     ) -> None:
         normalized_config_path = artifact_dir / "config_snapshot.json"
@@ -266,6 +282,7 @@ class TreehouseLabRunner:
         split_path = artifact_dir / "split_summary.json"
         params_path = artifact_dir / "model_params.json"
         context_path = artifact_dir / "run_context.json"
+        assessment_path = artifact_dir / "assessment.json"
         summary_path = artifact_dir / "summary.md"
         importances_path = artifact_dir / "feature_importances.csv"
         original_config_path = artifact_dir / self.config_path.name
@@ -273,13 +290,14 @@ class TreehouseLabRunner:
         shutil.copy2(self.config_path, original_config_path)
         normalized_config_path.write_text(json.dumps(self.config.raw, indent=2, sort_keys=True), encoding="utf-8")
         metrics_path.write_text(json.dumps(metrics, indent=2, sort_keys=True), encoding="utf-8")
-        split_path.write_text(json.dumps(split.summary(), indent=2, sort_keys=True), encoding="utf-8")
+        split_path.write_text(json.dumps(split_summary, indent=2, sort_keys=True), encoding="utf-8")
         params_path.write_text(json.dumps(params, indent=2, sort_keys=True), encoding="utf-8")
         context_path.write_text(json.dumps(metadata, indent=2, sort_keys=True), encoding="utf-8")
+        assessment_path.write_text(json.dumps(assessment, indent=2, sort_keys=True), encoding="utf-8")
 
         importance_frame = pd.DataFrame(
             {
-                "feature": list(split.X_train.columns),
+                "feature": feature_names,
                 "importance": model.feature_importances_,
             }
         ).sort_values("importance", ascending=False)
@@ -292,11 +310,12 @@ class TreehouseLabRunner:
                 backend=backend,
                 hypothesis=hypothesis,
                 metrics=metrics,
-                split_summary=split.summary(),
+                split_summary=split_summary,
                 runtime_seconds=runtime_seconds,
                 promoted=promoted,
                 comparison=comparison,
                 decision_reason=decision_reason,
+                assessment=assessment,
                 metadata=metadata,
             ),
             encoding="utf-8",
@@ -316,6 +335,7 @@ class TreehouseLabRunner:
                     "params": params,
                     "backend": backend,
                     "metrics": metrics,
+                    "assessment": assessment,
                 },
             )
 
@@ -331,12 +351,15 @@ class TreehouseLabRunner:
         promoted: bool,
         comparison: dict[str, Any],
         decision_reason: str,
+        assessment: dict[str, Any],
         metadata: dict[str, Any],
     ) -> str:
         lines = [
             f"# {mutation_name}",
             "",
             f"- run_id: `{run_id}`",
+            f"- benchmark_pack: `{self.config.benchmark.pack}`",
+            f"- benchmark_profile: `{self.config.benchmark.profile}`",
             f"- hypothesis: {hypothesis}",
             f"- backend: `{backend}`",
             f"- primary_metric: `{self.config.primary_metric}`",
@@ -345,6 +368,8 @@ class TreehouseLabRunner:
             f"- decision: `{'promote' if promoted else 'reject'}`",
             f"- explanation: {decision_reason}",
         ]
+        if self.config.benchmark.objective:
+            lines.append(f"- benchmark_objective: {self.config.benchmark.objective}")
         if metadata:
             lines.extend(
                 [
@@ -354,6 +379,17 @@ class TreehouseLabRunner:
                     *(f"- {key}: `{value}`" for key, value in metadata.items() if not isinstance(value, (dict, list))),
                 ]
             )
+        lines.extend(
+            [
+                "",
+                "## Assessment",
+                "",
+                f"- benchmark_status: `{assessment['benchmark_status']}`",
+                f"- benchmark_summary: {assessment['benchmark_summary']}",
+                f"- implementation_readiness: `{assessment['implementation_readiness']}`",
+            ]
+        )
+        lines.extend(f"- {check['name']}: `{check['passed']}` ({check['detail']})" for check in assessment["checks"])
         lines.extend(
             [
                 "",
@@ -391,6 +427,7 @@ class TreehouseLabRunner:
             mlflow.set_tag("treehouse_lab.run_id", run_id)
             mlflow.set_tag("treehouse_lab.promoted", str(promoted).lower())
             mlflow.set_tag("treehouse_lab.backend", backend)
+            mlflow.set_tag("treehouse_lab.benchmark_profile", self.config.benchmark.profile)
             if "proposal_id" in metadata:
                 mlflow.set_tag("treehouse_lab.proposal_id", str(metadata["proposal_id"]))
             if "mutation_type" in metadata:

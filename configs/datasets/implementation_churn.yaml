@@ -1,0 +1,43 @@
+dataset:
+  source:
+    kind: synthetic_churn_demo
+    name: Implementation-Like Churn
+    target_column: churned
+    variant: implementation_like
+    rows: 1800
+    random_state: 42
+  split:
+    validation_size: 0.2
+    test_size: 0.2
+    stratify: true
+
+benchmark:
+  pack: v1
+  profile: implementation_like
+  objective: Check whether the loop can produce a model that is not only better than the incumbent but realistic to carry into an implementation path.
+
+evaluation_policy:
+  minimum_primary_metric: 0.84
+  max_train_validation_gap: 0.04
+  max_validation_test_gap: 0.03
+  max_runtime_seconds: 30
+  max_feature_count: 20
+  require_promotion_for_readiness: true
+
+experiment:
+  name: implementation-churn-baseline
+  description: Business-style benchmark intended to resemble a plausible first implementation target.
+  primary_metric: roc_auc
+  promote_if_delta_at_least: 0.003
+  max_runtime_minutes: 10
+  seed: 42
+  baseline_hypothesis: A compact XGBoost baseline should capture the main churn drivers while staying readable enough to implement.
+
+model:
+  params:
+    n_estimators: 280
+    max_depth: 4
+    learning_rate: 0.06
+    min_child_weight: 2
+    subsample: 0.9
+    colsample_bytree: 0.85

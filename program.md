@@ -44,6 +44,8 @@ A candidate becomes the new incumbent only if:
 - evaluation is leakage-safe
 - the result is reproducible
 
+A candidate is implementation-ready only if it also clears the dataset's readiness checks.
+
 ## Expected workflow
 
 1. Read the dataset spec and current incumbent.
@@ -62,6 +64,8 @@ A candidate becomes the new incumbent only if:
 - runtime delta
 - feature count delta if relevant
 - decision: promote or reject
+- benchmark status
+- implementation readiness
 - short explanation
 
 ## Biases

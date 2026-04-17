@@ -39,6 +39,7 @@ def build_run_narrative(
     decision = "promote" if result.promoted else "reject"
     incumbent_metric = incumbent_before.get("metric") if incumbent_before else None
     incumbent_metric_text = "n/a" if incumbent_metric is None else f"{float(incumbent_metric):.4f}"
+    assessment = result.assessment
 
     markdown = "\n".join(
         [
@@ -68,6 +69,13 @@ def build_run_narrative(
             f"- `{decision}`",
             f"- {result.decision_reason}",
             "",
+            "## Assessment",
+            "",
+            f"- benchmark_status: `{assessment['benchmark_status']}`",
+            f"- benchmark_summary: {assessment['benchmark_summary']}",
+            f"- implementation_readiness: `{assessment['implementation_readiness']}`",
+            *(f"- {check['name']}: `{check['passed']}` ({check['detail']})" for check in assessment["checks"]),
+            "",
             "## Next step",
             "",
             recommended_next_step or "No further bounded step has been selected yet.",
@@ -75,7 +83,8 @@ def build_run_narrative(
     )
     summary = (
         f"{proposal.mutation_name} {decision} with validation {proposal.dataset_key} "
-        f"{result.metric:.4f} and delta {delta_text}."
+        f"{result.metric:.4f}, delta {delta_text}, and readiness "
+        f"{assessment['implementation_readiness']}."
     )
     return RunNarrative(
         title=proposal.mutation_name,
@@ -90,18 +99,26 @@ def build_loop_summary(dataset_key: str, history: list[dict[str, Any]], final_in
     promoted_count = sum(1 for step in history if step["result"]["promoted"])
     total_steps = len(history)
     final_metric = "n/a" if final_incumbent is None else f"{float(final_incumbent['metric']):.4f}"
+    final_readiness = "n/a"
+    if final_incumbent is not None and "assessment" in final_incumbent:
+        final_readiness = str(final_incumbent["assessment"].get("implementation_readiness", "n/a"))
     lines = [
         f"# Autonomous Loop Summary: {dataset_key}",
         "",
         f"- executed_steps: `{total_steps}`",
         f"- promoted_steps: `{promoted_count}`",
         f"- final_incumbent_metric: `{final_metric}`",
+        f"- final_implementation_readiness: `{final_readiness}`",
         "",
         "## Step history",
         "",
     ]
     lines.extend(
-        f"- step {step['step_index'] + 1}: `{step['proposal']['mutation_name']}` -> `{ 'promote' if step['result']['promoted'] else 'reject' }`"
+        (
+            f"- step {step['step_index'] + 1}: `{step['proposal']['mutation_name']}` "
+            f"-> `{ 'promote' if step['result']['promoted'] else 'reject' }`, "
+            f"`{step['result']['assessment']['implementation_readiness']}`"
+        )
         for step in history
     )
     return LoopNarrative(

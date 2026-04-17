@@ -27,6 +27,7 @@ def read_text(path: Path) -> str:
 def render_metric_grid(result: dict[str, object]) -> None:
     metrics = result["metrics"]
     comparison = result["comparison_to_incumbent"]
+    assessment = result.get("assessment", {})
     columns = st.columns(4)
     columns[0].metric("Validation ROC AUC", f"{metrics['validation_roc_auc']:.4f}")
     columns[1].metric("Test ROC AUC", f"{metrics['test_roc_auc']:.4f}")
@@ -34,6 +35,11 @@ def render_metric_grid(result: dict[str, object]) -> None:
     delta = comparison.get("delta")
     delta_text = "n/a" if delta is None else f"{delta:.4f}"
     columns[3].metric("Delta vs Incumbent", delta_text)
+    if assessment:
+        st.caption(
+            f"Benchmark status: `{assessment['benchmark_status']}` | "
+            f"Implementation readiness: `{assessment['implementation_readiness']}`"
+        )
 
 
 def run_and_render_baseline(config_path: Path) -> None:
@@ -83,6 +89,12 @@ with overview_tab:
     with left:
         st.subheader(selected_config.name)
         st.write(selected_config.description)
+        st.caption(
+            f"Benchmark pack: `{selected_config.benchmark.pack}` | "
+            f"Profile: `{selected_config.benchmark.profile}`"
+        )
+        if selected_config.benchmark.objective:
+            st.write(selected_config.benchmark.objective)
         st.markdown(
             "\n".join(
                 [
@@ -90,6 +102,7 @@ with overview_tab:
                     "- The held-out test set is preserved while search decisions are made on validation metrics.",
                     "- Every run emits a readable artifact bundle plus a journal entry.",
                     "- Promotion is threshold-based, not vibes-based.",
+                    "- Each run is labeled both for benchmark improvement and implementation readiness.",
                 ]
             )
         )
