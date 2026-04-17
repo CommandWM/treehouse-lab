@@ -121,9 +121,10 @@ Treehouse Lab currently exposes four core commands:
 - `treehouse-lab baseline <config>`: train and log the initial incumbent for a dataset spec
 - `treehouse-lab candidate <config> --name ... --set ...`: run one explicit bounded mutation
 - `treehouse-lab propose <config>`: inspect the next deterministic proposal without executing it
+- `treehouse-lab diagnose <config>`: inspect the current diagnosis plus the next bounded proposal
 - `treehouse-lab loop <config> --steps N`: run a short autonomous research cycle with promote/reject decisions and narratives
 
-The important distinction is that `propose` and `loop` do not freestyle. They operate inside explicit mutation templates and the declared search space in `configs/search_space.yaml`.
+The important distinction is that `diagnose`, `propose`, and `loop` do not freestyle. They operate inside explicit mutation templates and the declared search space in `configs/search_space.yaml`.
 
 ## Included examples
 

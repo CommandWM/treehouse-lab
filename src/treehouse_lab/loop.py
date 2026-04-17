@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from treehouse_lab.config import load_yaml_file
+from treehouse_lab.diagnosis import diagnose_run_state
 from treehouse_lab.features import build_feature_plan, run_feature_plan, should_enable_feature_generation
 from treehouse_lab.journal import (
     ensure_run_directories,
@@ -47,6 +48,17 @@ class LoopSummary:
     final_incumbent: dict[str, Any] | None
     loop_dir: str
     stop_reason: str
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass(slots=True)
+class DiagnosisPreview:
+    dataset_key: str
+    config_path: str
+    diagnosis: dict[str, Any]
+    next_proposal: dict[str, Any] | None
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -208,6 +220,16 @@ class AutonomousLoopController:
             raise ValueError(msg)
         return proposal
 
+    def diagnose(self) -> DiagnosisPreview:
+        context = self._build_context(loop_step_index=0, loop_history=[])
+        next_proposal = self.choose_next_proposal(loop_step_index=0, loop_history=[])
+        return DiagnosisPreview(
+            dataset_key=self.registry_key,
+            config_path=str(self.runner.config_path),
+            diagnosis=context.diagnosis,
+            next_proposal=None if next_proposal is None else next_proposal.to_dict(),
+        )
+
     def _build_context(self, loop_step_index: int, loop_history: list[LoopStepResult]) -> ProposalDecisionContext:
         incumbent = load_incumbent(self.project_root, self.registry_key)
         journal_entries = load_journal_entries(self.project_root, self.registry_key)
@@ -229,6 +251,7 @@ class AutonomousLoopController:
 
         overfit_gap = float(incumbent_metrics.get("train_roc_auc", 0.0)) - float(incumbent_metrics.get("validation_roc_auc", 0.0))
         positive_rate = float(split_summary.get("validation_positive_rate", split_summary.get("train_positive_rate", 0.5)))
+        diagnosis = diagnose_run_state(self.config, incumbent_metrics, split_summary, recent_entries=journal_entries).to_dict()
 
         recent_mutation_types = [
             entry.get("mutation_type")
@@ -266,6 +289,7 @@ class AutonomousLoopController:
                 if mutation_name
             ],
             allow_feature_generation=bool(self.search_space.get("policy", {}).get("allow_feature_generation", False)),
+            diagnosis=diagnosis,
         )
 
     def _write_run_narrative(self, result: ExperimentResult, proposal: ExperimentProposal, narrative: Any) -> Path:
@@ -289,7 +313,7 @@ class AutonomousLoopController:
         if incumbent_entry is None:
             return incumbent
         enriched = dict(incumbent)
-        for key in ("params", "metrics", "split_summary", "metadata"):
+        for key in ("params", "metrics", "split_summary", "metadata", "assessment", "diagnosis", "reason_codes"):
             if key in incumbent_entry:
                 enriched[key] = incumbent_entry[key]
         return enriched

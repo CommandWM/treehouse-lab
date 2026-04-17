@@ -118,6 +118,10 @@ def _score_template(template: MutationTemplate, context: ProposalDecisionContext
     score = template.base_score
     overfit_gap = context.overfit_gap
     positive_rate_delta = abs(0.5 - context.positive_rate)
+    diagnosis = context.diagnosis
+    preferred_mutations = set(diagnosis.get("preferred_mutations", []))
+    avoided_mutations = set(diagnosis.get("avoided_mutations", []))
+    diagnosis_tags = set(diagnosis.get("tags", []))
 
     if template.name == "regularization_tighten":
         score += 0.7 if overfit_gap > 0.03 else -0.2
@@ -128,12 +132,17 @@ def _score_template(template: MutationTemplate, context: ProposalDecisionContext
     if template.name == "imbalance_adjustment":
         score += 0.6 if positive_rate_delta > 0.15 else -0.8
 
-    if context.loop_step_index == 0 and template.name == "regularization_tighten":
+    if template.name in preferred_mutations:
         score += 1.2
-    if context.loop_step_index == 1 and template.name == "learning_rate_tradeoff":
-        score += 1.0
-    if context.loop_step_index >= 2 and template.name in {"capacity_increase", "imbalance_adjustment"}:
-        score += 0.9
+    if template.name in avoided_mutations:
+        score -= 1.1
+
+    if "plateau" in diagnosis_tags and template.name == "learning_rate_tradeoff":
+        score += 0.4
+    if "overfit" in diagnosis_tags and template.name == "capacity_increase":
+        score -= 0.7
+    if "underfit" in diagnosis_tags and template.name == "regularization_tighten":
+        score -= 0.7
 
     if template.name in context.executed_mutation_types:
         score -= 1.3
@@ -151,19 +160,26 @@ def _hypothesis_for_template(template: MutationTemplate) -> str:
 
 
 def _rationale_for_template(template: MutationTemplate, context: ProposalDecisionContext) -> str:
+    diagnosis_summary = context.diagnosis.get("summary", "")
     if template.name == "regularization_tighten":
         return (
+            f"Diagnosis: {diagnosis_summary} "
             f"The incumbent shows a train-validation ROC AUC gap of {context.overfit_gap:.4f}, "
             "so the next bounded move should reduce tree capacity before trying more complex changes."
         )
     if template.name == "learning_rate_tradeoff":
         return (
+            f"Diagnosis: {diagnosis_summary} "
             "The incumbent is already reasonably strong, so the next attributable move is to trade a smaller learning rate "
             "for more trees and test whether the gain is more stable."
         )
     if template.name == "capacity_increase":
-        return "The incumbent does not look strongly overfit, so a modest capacity increase is justified before feature-generation work."
+        return (
+            f"Diagnosis: {diagnosis_summary} "
+            "A modest capacity increase is only justified if the incumbent still looks signal-limited after bounded regularization."
+        )
     return (
+        f"Diagnosis: {diagnosis_summary} "
         f"The positive-class rate is {context.positive_rate:.3f}, which is far enough from parity to justify "
         "a bounded class-balance adjustment."
     )

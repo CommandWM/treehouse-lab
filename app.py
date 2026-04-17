@@ -40,6 +40,12 @@ def render_metric_grid(result: dict[str, object]) -> None:
             f"Benchmark status: `{assessment['benchmark_status']}` | "
             f"Implementation readiness: `{assessment['implementation_readiness']}`"
         )
+    diagnosis = result.get("diagnosis", {})
+    if diagnosis:
+        st.caption(
+            f"Diagnosis: `{diagnosis['primary_tag']}` | "
+            f"{diagnosis['recommended_direction']}"
+        )
 
 
 def run_and_render_baseline(config_path: Path) -> None:

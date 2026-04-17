@@ -49,12 +49,13 @@ A candidate is implementation-ready only if it also clears the dataset's readine
 ## Expected workflow
 
 1. Read the dataset spec and current incumbent.
-2. Propose one experiment.
-3. State the hypothesis plainly.
-4. Run the experiment.
-5. Compare with baseline and incumbent.
-6. Either promote or reject.
-7. Log the result in a way a human can audit later.
+2. Diagnose the current failure mode.
+3. Propose one experiment.
+4. State the hypothesis plainly.
+5. Run the experiment.
+6. Compare with baseline and incumbent.
+7. Either promote or reject.
+8. Log the result in a way a human can audit later.
 
 ## Output format for each experiment
 
@@ -66,6 +67,7 @@ A candidate is implementation-ready only if it also clears the dataset's readine
 - decision: promote or reject
 - benchmark status
 - implementation readiness
+- diagnosis tag and reason codes
 - short explanation
 
 ## Biases

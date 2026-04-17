@@ -14,11 +14,13 @@ from sklearn.metrics import accuracy_score, log_loss, roc_auc_score
 
 from treehouse_lab.config import load_experiment_config
 from treehouse_lab.datasets import DatasetSplit, load_dataset, split_dataset
+from treehouse_lab.diagnosis import build_reason_codes, diagnose_run_state
 from treehouse_lab.evaluation import assess_run
 from treehouse_lab.journal import (
     append_journal_entry,
     ensure_run_directories,
     load_incumbent,
+    load_journal_entries,
     save_incumbent,
 )
 
@@ -72,6 +74,8 @@ class ExperimentResult:
     split_summary: dict[str, float | int]
     comparison_to_incumbent: dict[str, Any]
     assessment: dict[str, Any]
+    diagnosis: dict[str, Any]
+    reason_codes: list[str]
     metadata: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
@@ -139,6 +143,9 @@ class TreehouseLabRunner:
             comparison=comparison,
             promoted=promoted,
         )
+        recent_entries = load_journal_entries(self.project_root, self.registry_key)
+        diagnosis = diagnose_run_state(self.config, metrics, split_summary, recent_entries=recent_entries)
+        reason_codes = build_reason_codes(promoted, comparison, assessment.to_dict(), diagnosis)
 
         run_id = self._build_run_id(mutation_name)
         artifact_dir = ensure_run_directories(self.project_root) / run_id
@@ -159,6 +166,8 @@ class TreehouseLabRunner:
             comparison=comparison,
             decision_reason=decision_reason,
             assessment=assessment.to_dict(),
+            diagnosis=diagnosis.to_dict(),
+            reason_codes=reason_codes,
             metadata=metadata or {},
         )
         self._log_mlflow_if_available(
@@ -189,6 +198,8 @@ class TreehouseLabRunner:
             split_summary=split_summary,
             comparison_to_incumbent=comparison,
             assessment=assessment.to_dict(),
+            diagnosis=diagnosis.to_dict(),
+            reason_codes=reason_codes,
             metadata=metadata or {},
         )
         self._record_journal(result)
@@ -275,6 +286,8 @@ class TreehouseLabRunner:
         comparison: dict[str, Any],
         decision_reason: str,
         assessment: dict[str, Any],
+        diagnosis: dict[str, Any],
+        reason_codes: list[str],
         metadata: dict[str, Any],
     ) -> None:
         normalized_config_path = artifact_dir / "config_snapshot.json"
@@ -283,6 +296,7 @@ class TreehouseLabRunner:
         params_path = artifact_dir / "model_params.json"
         context_path = artifact_dir / "run_context.json"
         assessment_path = artifact_dir / "assessment.json"
+        diagnosis_path = artifact_dir / "diagnosis.json"
         summary_path = artifact_dir / "summary.md"
         importances_path = artifact_dir / "feature_importances.csv"
         original_config_path = artifact_dir / self.config_path.name
@@ -294,6 +308,7 @@ class TreehouseLabRunner:
         params_path.write_text(json.dumps(params, indent=2, sort_keys=True), encoding="utf-8")
         context_path.write_text(json.dumps(metadata, indent=2, sort_keys=True), encoding="utf-8")
         assessment_path.write_text(json.dumps(assessment, indent=2, sort_keys=True), encoding="utf-8")
+        diagnosis_path.write_text(json.dumps(diagnosis, indent=2, sort_keys=True), encoding="utf-8")
 
         importance_frame = pd.DataFrame(
             {
@@ -316,6 +331,8 @@ class TreehouseLabRunner:
                 comparison=comparison,
                 decision_reason=decision_reason,
                 assessment=assessment,
+                diagnosis=diagnosis,
+                reason_codes=reason_codes,
                 metadata=metadata,
             ),
             encoding="utf-8",
@@ -336,6 +353,8 @@ class TreehouseLabRunner:
                     "backend": backend,
                     "metrics": metrics,
                     "assessment": assessment,
+                    "diagnosis": diagnosis,
+                    "reason_codes": reason_codes,
                 },
             )
 
@@ -352,6 +371,8 @@ class TreehouseLabRunner:
         comparison: dict[str, Any],
         decision_reason: str,
         assessment: dict[str, Any],
+        diagnosis: dict[str, Any],
+        reason_codes: list[str],
         metadata: dict[str, Any],
     ) -> str:
         lines = [
@@ -392,6 +413,18 @@ class TreehouseLabRunner:
         lines.extend(f"- {check['name']}: `{check['passed']}` ({check['detail']})" for check in assessment["checks"])
         lines.extend(
             [
+                "",
+                "## Diagnosis",
+                "",
+                f"- primary_tag: `{diagnosis['primary_tag']}`",
+                f"- summary: {diagnosis['summary']}",
+                f"- recommended_direction: {diagnosis['recommended_direction']}",
+                f"- preferred_mutations: `{', '.join(diagnosis['preferred_mutations']) or 'none'}`",
+                f"- avoided_mutations: `{', '.join(diagnosis['avoided_mutations']) or 'none'}`",
+                "",
+                "## Reason codes",
+                "",
+                *(f"- `{code}`" for code in reason_codes),
                 "",
                 "## Split summary",
                 "",

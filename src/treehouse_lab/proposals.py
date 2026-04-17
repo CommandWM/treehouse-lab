@@ -11,6 +11,7 @@ class ExperimentProposal:
     dataset_key: str
     mutation_type: str
     mutation_name: str
+    diagnosis_summary: str
     hypothesis: str
     rationale: str
     expected_upside: str
@@ -45,6 +46,7 @@ class ProposalDecisionContext:
     executed_mutation_types: list[str]
     executed_mutation_names: list[str]
     allow_feature_generation: bool
+    diagnosis: dict[str, Any]
 
 
 def build_baseline_proposal(dataset_key: str, hypothesis: str) -> ExperimentProposal:
@@ -53,6 +55,7 @@ def build_baseline_proposal(dataset_key: str, hypothesis: str) -> ExperimentProp
         dataset_key=dataset_key,
         mutation_type="baseline",
         mutation_name="baseline",
+        diagnosis_summary="No incumbent exists yet, so the loop must establish a baseline before diagnosis-aware mutation selection begins.",
         hypothesis=hypothesis,
         rationale="No incumbent exists yet, so Treehouse Lab must establish a strong baseline before proposing bounded mutations.",
         expected_upside="Creates the first auditable incumbent and defines the benchmark every later mutation must beat.",
@@ -77,6 +80,7 @@ def build_mutation_proposal(
         dataset_key=context.dataset_key,
         mutation_type=mutation_type,
         mutation_name=mutation_name,
+        diagnosis_summary=str(context.diagnosis.get("summary", "")),
         hypothesis=hypothesis,
         rationale=rationale,
         expected_upside=expected_upside,

@@ -31,6 +31,9 @@ def build_parser() -> argparse.ArgumentParser:
     propose_parser = subparsers.add_parser("propose", help="Show the next bounded experiment proposal without executing it.")
     propose_parser.add_argument("config", type=Path, help="Path to the dataset config YAML.")
 
+    diagnose_parser = subparsers.add_parser("diagnose", help="Show the current diagnosis and the next bounded proposal.")
+    diagnose_parser.add_argument("config", type=Path, help="Path to the dataset config YAML.")
+
     loop_parser = subparsers.add_parser("loop", help="Run the bounded autonomous research loop.")
     loop_parser.add_argument("config", type=Path, help="Path to the dataset config YAML.")
     loop_parser.add_argument("--steps", type=int, default=3, help="Maximum number of bounded loop steps to run.")
@@ -77,6 +80,9 @@ def main() -> None:
     elif args.command == "propose":
         controller = AutonomousLoopController(args.config)
         result = controller.next_proposal().to_dict()
+    elif args.command == "diagnose":
+        controller = AutonomousLoopController(args.config)
+        result = controller.diagnose().to_dict()
     else:
         controller = AutonomousLoopController(args.config)
         result = controller.run_loop(max_steps=args.steps).to_dict()

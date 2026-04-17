@@ -45,6 +45,10 @@ def build_run_narrative(
         [
             f"# {proposal.mutation_name}",
             "",
+            "## Diagnosis",
+            "",
+            proposal.diagnosis_summary or "No diagnosis summary was captured for this proposal.",
+            "",
             "## Hypothesis",
             "",
             proposal.hypothesis,
@@ -83,7 +87,7 @@ def build_run_narrative(
     )
     summary = (
         f"{proposal.mutation_name} {decision} with validation {proposal.dataset_key} "
-        f"{result.metric:.4f}, delta {delta_text}, and readiness "
+        f"{result.metric:.4f}, diagnosis {result.diagnosis['primary_tag']}, and readiness "
         f"{assessment['implementation_readiness']}."
     )
     return RunNarrative(
@@ -110,9 +114,26 @@ def build_loop_summary(dataset_key: str, history: list[dict[str, Any]], final_in
         f"- final_incumbent_metric: `{final_metric}`",
         f"- final_implementation_readiness: `{final_readiness}`",
         "",
-        "## Step history",
+        "## Final diagnosis",
         "",
     ]
+    if final_incumbent is None:
+        lines.append("No final incumbent diagnosis is available.")
+    else:
+        diagnosis = final_incumbent.get("diagnosis", {})
+        lines.extend(
+            [
+                f"- primary_tag: `{diagnosis.get('primary_tag', 'n/a')}`",
+                f"- summary: {diagnosis.get('summary', 'n/a')}",
+            ]
+        )
+    lines.extend(
+        [
+            "",
+            "## Step history",
+            "",
+        ]
+    )
     lines.extend(
         (
             f"- step {step['step_index'] + 1}: `{step['proposal']['mutation_name']}` "
