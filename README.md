@@ -6,7 +6,7 @@
 
 Treehouse Lab is a Karpathy-style autoresearch loop for tabular machine learning.
 
-The idea is simple: give an agent a constrained playground around XGBoost style models, let it propose experiments, run them safely, keep only the winners, and leave behind a readable research log instead of a pile of notebook debris.
+The idea is simple: give an agent a constrained playground around XGBoost-style models, let it propose experiments, run them safely, keep only the winners, and leave behind a readable research log instead of a pile of notebook debris.
 
 ## Why this exists
 
@@ -51,16 +51,18 @@ Later versions can add LightGBM, CatBoost, time series, richer feature stores, a
 6. Log the result, rationale, diff, and artifacts.
 7. Repeat.
 
-## Current repo status
+## What exists now
 
-This repository now includes a runnable MVP slice:
+This repository now includes a real runnable slice:
 
 - dataset specs in `configs/datasets/`
-- a baseline and bounded-candidate runner in `src/treehouse_lab/`
+- a baseline runner and bounded candidate execution in `src/treehouse_lab/`
+- a deterministic autonomous loop with proposal selection and narratives
 - local artifact bundles and an incumbent registry under `runs/`
+- loop summaries under `runs/loops/`
 - a Streamlit demo UI in `app.py`
 
-The full autoresearch loop is still in progress, but the baseline path is no longer just a placeholder.
+This is still an MVP, but it is no longer just scaffolding. You can now establish incumbents, inspect the next bounded proposal, run a short autonomous loop, and review the resulting narratives and artifacts.
 
 ## Quickstart
 
@@ -70,11 +72,23 @@ Install the package and the Streamlit UI extra:
 pip install -e '.[ui]'
 ```
 
-Run one of the example baselines from the CLI:
+Run a baseline:
 
 ```bash
 treehouse-lab baseline configs/datasets/breast_cancer.yaml
 treehouse-lab baseline configs/datasets/churn_demo.yaml
+```
+
+Preview the next bounded experiment without executing it:
+
+```bash
+treehouse-lab propose configs/datasets/churn_demo.yaml
+```
+
+Run the bounded autonomous loop:
+
+```bash
+treehouse-lab loop configs/datasets/churn_demo.yaml --steps 3
 ```
 
 Run the demo interface:
@@ -85,6 +99,17 @@ streamlit run app.py
 
 If your local XGBoost install cannot load, for example because `libomp` is missing on macOS, the runner falls back to sklearn gradient boosting so the examples remain runnable.
 
+## CLI commands
+
+Treehouse Lab currently exposes four core commands:
+
+- `treehouse-lab baseline <config>`: train and log the initial incumbent for a dataset spec
+- `treehouse-lab candidate <config> --name ... --set ...`: run one explicit bounded mutation
+- `treehouse-lab propose <config>`: inspect the next deterministic proposal without executing it
+- `treehouse-lab loop <config> --steps N`: run a short autonomous research cycle with promote/reject decisions and narratives
+
+The important distinction is that `propose` and `loop` do not freestyle. They operate inside explicit mutation templates and the declared search space in `configs/search_space.yaml`.
+
 ## Included examples
 
 Two examples are bundled so the repo is usable offline:
@@ -94,11 +119,31 @@ Two examples are bundled so the repo is usable offline:
 
 This keeps the onboarding path self-contained while the public benchmark examples evolve.
 
+## How the loop works
+
+The current autonomous loop is intentionally conservative:
+
+1. Read the dataset config, current incumbent, and recent journal history.
+2. Score a small set of bounded mutation templates.
+3. Select exactly one next proposal.
+4. Run the proposal against the current incumbent parameters.
+5. Promote only if the result clears the configured threshold.
+6. Write artifacts, a narrative, and a loop summary.
+
+The proposal engine currently prefers simple parameter-only moves first:
+
+- `regularization_tighten`
+- `learning_rate_tradeoff`
+- `capacity_increase`
+- `imbalance_adjustment`
+
+Feature generation is stage-gated but not yet fully executed. That is deliberate. The first goal is to prove disciplined iteration before adding a more complex branch.
+
 ## Proposed architecture
 
 - `datasets/` dataset specs and split policies
 - `configs/` model spaces, budgets, and guardrails
-- `src/treehouse_lab/` runner, evaluator, registry, journal, mutators
+- `src/treehouse_lab/` runner, loop controller, registry, journal, mutators, narratives
 - `program.md` agent instructions for Codex or Claude Code
 - `docs/` architecture notes, roadmap, and experiment policy
 
@@ -130,6 +175,18 @@ That is the product.
 
 See [docs/mvp.md](docs/mvp.md) for the build plan.
 See [docs/autonomous-loop.md](docs/autonomous-loop.md) for the next implementation phase.
+
+## Working through a cycle
+
+The cleanest way to think about Treehouse Lab right now is:
+
+- start with a dataset spec
+- establish a baseline incumbent
+- inspect or run the next bounded proposal
+- review whether the run was promoted or rejected
+- read the resulting narrative instead of reverse-engineering raw metrics
+
+For now, that is the right level of interaction. The repo is aimed at tightening the research loop first, then layering on richer UI and eventual serving or system integration later.
 
 ## Name
 
