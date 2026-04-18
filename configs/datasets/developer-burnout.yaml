@@ -1,0 +1,43 @@
+dataset:
+  source:
+    kind: csv
+    name: Developer Burnout
+    target_column: burnout_level_binary
+    path: custom_datasets/developer_burnout_dataset_7000v2.csv
+  split:
+    validation_size: 0.2
+    test_size: 0.2
+    stratify: true
+benchmark:
+  pack: user
+  profile: dataset_intake
+  objective: Establish a clean XGBoost baseline for a custom developer burnout dataset
+    before bounded autoresearch begins.
+evaluation_policy:
+  require_promotion_for_readiness: true
+experiment:
+  name: developer-burnout-baseline
+  description: Developer burnout prediction benchmark using workload, sleep, activity,
+    and stress indicators.
+  primary_metric: roc_auc
+  promote_if_delta_at_least: 0.003
+  max_runtime_minutes: 10
+  seed: 42
+  baseline_hypothesis: A disciplined XGBoost baseline should establish a credible
+    incumbent before bounded mutations begin.
+model:
+  params:
+    n_estimators: 300
+    max_depth: 6
+    learning_rate: 0.05
+    min_child_weight: 1
+    subsample: 0.9
+    colsample_bytree: 0.8
+    reg_alpha: 0.0
+    reg_lambda: 1.0
+    gamma: 0.0
+    objective: binary:logistic
+    eval_metric: logloss
+    random_state: 42
+    tree_method: hist
+    n_jobs: 4

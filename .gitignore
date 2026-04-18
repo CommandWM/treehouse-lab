@@ -4,6 +4,7 @@ __pycache__/
 .venv/
 venv/
 .env
+.treehouse_lab/
 .DS_Store
 .pytest_cache/
 .ruff_cache/
@@ -15,6 +16,7 @@ artifacts/
 data/
 custom_datasets/
 outputs/
+exports/
 *.log
 *.egg-info/
 frontend/node_modules/

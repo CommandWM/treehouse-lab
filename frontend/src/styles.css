@@ -414,14 +414,27 @@ select {
   margin-bottom: 1rem;
 }
 
+.signal-grid--inspector {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
 .signal-card {
   padding: 0.95rem;
+  min-width: 0;
 }
 
 .signal-value {
   font-weight: 800;
   font-size: 1.02rem;
   margin-bottom: 0.35rem;
+  line-height: 1.15;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.signal-copy {
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .state-grid,
@@ -434,6 +447,10 @@ select {
 .note-card {
   padding: 1rem;
   margin: 0.9rem 0;
+}
+
+.note-card--tight {
+  margin: 0.75rem 0;
 }
 
 .note-card strong {
@@ -546,6 +563,37 @@ select {
   display: grid;
   grid-template-columns: 1.05fr 0.95fr;
   gap: 1rem;
+}
+
+.advisor-toolbar,
+.advisor-copy {
+  display: grid;
+  gap: 0.85rem;
+}
+
+.advisor-toolbar {
+  margin-top: 1rem;
+}
+
+.advisor-copy {
+  margin-top: 1rem;
+}
+
+.advisor-copy p {
+  margin: 0;
+  color: var(--muted);
+}
+
+.pagination-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.pagination-controls .action-button {
+  min-width: auto;
 }
 
 .intake-grid {

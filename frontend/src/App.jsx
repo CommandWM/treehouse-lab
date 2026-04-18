@@ -49,6 +49,7 @@ const workspaceViews = [
 const referenceViews = [
   ["architecture", "Architecture"],
   ["glossary", "Glossary"],
+  ["settings", "Settings"],
 ];
 
 const intakeDefaults = {
@@ -63,6 +64,8 @@ const intakeDefaults = {
   testSize: "0.2",
   stratify: true,
 };
+const defaultAdvisorQuestion = "What should I do next and why?";
+const journalPageSize = 8;
 
 async function fetchJson(path, options = {}) {
   const response = await fetch(path, {
@@ -96,6 +99,13 @@ function App() {
   const [intakePreview, setIntakePreview] = useState(null);
   const [intakeBusy, setIntakeBusy] = useState("");
   const [templatesOpen, setTemplatesOpen] = useState(false);
+  const [advisor, setAdvisor] = useState(null);
+  const [advisorBusy, setAdvisorBusy] = useState(false);
+  const [advisorQuestion, setAdvisorQuestion] = useState(defaultAdvisorQuestion);
+  const [journalPage, setJournalPage] = useState(1);
+  const [llmSettings, setLlmSettings] = useState(null);
+  const [settingsBusy, setSettingsBusy] = useState(false);
+  const [exportManifest, setExportManifest] = useState(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -105,11 +115,13 @@ function App() {
           fetchJson("/api/configs"),
           fetchJson("/api/glossary"),
         ]);
+        const settingsPayload = await fetchJson("/api/settings/llm");
         if (cancelled) {
           return;
         }
         setConfigs(configPayload);
         setGlossary(glossaryPayload);
+        setLlmSettings(settingsPayload);
         const firstUserConfig = configPayload.find((config) => config.benchmark?.pack === "user");
         setSelectedKey(firstUserConfig?.key ?? configPayload[0]?.key ?? "");
       } catch (loadError) {
@@ -182,6 +194,13 @@ function App() {
     };
   }, [selectedRunId]);
 
+  useEffect(() => {
+    setAdvisor(null);
+    setAdvisorQuestion(defaultAdvisorQuestion);
+    setJournalPage(1);
+    setExportManifest(null);
+  }, [selectedKey]);
+
   async function refreshSelected(configKey = selectedKey) {
     if (!configKey) {
       return;
@@ -192,6 +211,7 @@ function App() {
     ]);
     setState(statePayload);
     setJournal(journalPayload);
+    setJournalPage(1);
     setSelectedRunId(journalPayload[0]?.run_id || "");
   }
 
@@ -306,6 +326,99 @@ function App() {
     }
   }
 
+  async function handleAskAdvisor() {
+    if (!selectedKey) {
+      return;
+    }
+    setAdvisorBusy(true);
+    setError("");
+    try {
+      const payload = await fetchJson(`/api/configs/${selectedKey}/advisor`, {
+        method: "POST",
+        body: JSON.stringify({ question: advisorQuestion }),
+      });
+      setAdvisor(payload);
+    } catch (actionError) {
+      setError(String(actionError.message || actionError));
+    } finally {
+      setAdvisorBusy(false);
+    }
+  }
+
+  async function handleRunCoachRecommendation() {
+    const mutationType = advisor?.recommended_proposal?.mutation_type;
+    if (!selectedKey || !mutationType) {
+      return;
+    }
+
+    setBusyAction("coach-recommendation");
+    setError("");
+    try {
+      await fetchJson(`/api/configs/${selectedKey}/coach-recommendation/run`, {
+        method: "POST",
+        body: JSON.stringify({ mutation_type: mutationType }),
+      });
+      await refreshSelected();
+      setActiveView("journal");
+    } catch (actionError) {
+      setError(String(actionError.message || actionError));
+    } finally {
+      setBusyAction("");
+    }
+  }
+
+  async function handleExportModel() {
+    if (!selectedKey) {
+      return;
+    }
+    setBusyAction("export");
+    setError("");
+    try {
+      const payload = await fetchJson(`/api/configs/${selectedKey}/export`, {
+        method: "POST",
+        body: JSON.stringify({}),
+      });
+      setExportManifest(payload);
+    } catch (actionError) {
+      setError(String(actionError.message || actionError));
+    } finally {
+      setBusyAction("");
+    }
+  }
+
+  function updateLlmSettingsField(field, value) {
+    setLlmSettings((current) => ({ ...(current ?? {}), [field]: value }));
+  }
+
+  async function handleSaveLlmSettings() {
+    if (!llmSettings) {
+      return;
+    }
+    setSettingsBusy(true);
+    setError("");
+    try {
+      const payload = await fetchJson("/api/settings/llm", {
+        method: "POST",
+        body: JSON.stringify({
+          provider: llmSettings.provider ?? "",
+          model: llmSettings.model ?? "",
+          loop_llm_selection: Boolean(llmSettings.loop_llm_selection),
+          ollama_base_url: llmSettings.ollama_base_url ?? "",
+          ollama_api_key: llmSettings.ollama_api_key ?? "",
+          agent_cli: llmSettings.agent_cli ?? "",
+          openai_compatible_base_url: llmSettings.openai_compatible_base_url ?? "",
+          openai_compatible_api_key: llmSettings.openai_compatible_api_key ?? "",
+          openai_api_key: llmSettings.openai_api_key ?? "",
+        }),
+      });
+      setLlmSettings(payload);
+    } catch (actionError) {
+      setError(String(actionError.message || actionError));
+    } finally {
+      setSettingsBusy(false);
+    }
+  }
+
   const selectedConfig = useMemo(
     () => configs.find((config) => config.key === selectedKey) ?? null,
     [configs, selectedKey],
@@ -323,8 +436,31 @@ function App() {
   const nextProposal = state?.diagnosis_preview?.next_proposal ?? null;
   const incumbent = state?.incumbent ?? null;
   const activeRun = runDetail?.entry ?? null;
+  const totalJournalPages = Math.max(1, Math.ceil(journal.length / journalPageSize));
+  const paginatedJournal = useMemo(() => {
+    const startIndex = (journalPage - 1) * journalPageSize;
+    return journal.slice(startIndex, startIndex + journalPageSize);
+  }, [journal, journalPage]);
   const hasSelectedDataset = Boolean(selectedConfig && state?.config?.key === selectedKey);
   const heroCopy = buildHeroCopy(activeView, hasSelectedDataset);
+
+  useEffect(() => {
+    if (journalPage > totalJournalPages) {
+      setJournalPage(totalJournalPages);
+    }
+  }, [journalPage, totalJournalPages]);
+
+  useEffect(() => {
+    if (!selectedRunId) {
+      return;
+    }
+    if (paginatedJournal.some((entry) => entry.run_id === selectedRunId)) {
+      return;
+    }
+    if (paginatedJournal[0]?.run_id) {
+      setSelectedRunId(paginatedJournal[0].run_id);
+    }
+  }, [paginatedJournal, selectedRunId]);
 
   if (loading) {
     return <div className="app-shell"><div className="loading-card">Loading Treehouse Lab UI…</div></div>;
@@ -454,7 +590,16 @@ function App() {
                 <button type="button" className="action-button action-button--secondary" onClick={handleRunLoop} disabled={busyAction !== ""}>
                   {busyAction === "loop" ? `Running ${loopSteps}-step loop…` : `Run ${loopSteps}-Step Loop`}
                 </button>
+                <button type="button" className="action-button" onClick={handleExportModel} disabled={busyAction !== ""}>
+                  {busyAction === "export" ? "Exporting model…" : "Export Model"}
+                </button>
               </div>
+              {exportManifest ? (
+                <div className="note-card">
+                  <strong>Export ready</strong>
+                  <p>{exportManifest.export_dir}</p>
+                </div>
+              ) : null}
             </>
           ) : (
             <>
@@ -476,16 +621,31 @@ function App() {
           diagnosis,
           nextProposal,
           journal,
+          paginatedJournal,
+          journalPage,
+          totalJournalPages,
           selectedRunId,
           setSelectedRunId,
+          setJournalPage,
           activeRun,
           runDetail,
           incumbent,
+          advisor,
+          advisorBusy,
+          advisorQuestion,
+          busyAction,
+          llmSettings,
+          settingsBusy,
           loopSteps,
           selectedConfig,
           updateIntakeField,
+          updateLlmSettingsField,
           handleInspectDataset,
           createDatasetConfig,
+          setAdvisorQuestion,
+          handleAskAdvisor,
+          handleRunCoachRecommendation,
+          handleSaveLlmSettings,
         })}
       </main>
     </div>
@@ -503,16 +663,31 @@ function renderActiveView(context) {
     diagnosis,
     nextProposal,
     journal,
+    paginatedJournal,
+    journalPage,
+    totalJournalPages,
     selectedRunId,
     setSelectedRunId,
+    setJournalPage,
     activeRun,
     runDetail,
     incumbent,
+    advisor,
+    advisorBusy,
+    advisorQuestion,
+    busyAction,
+    llmSettings,
+    settingsBusy,
     loopSteps,
     selectedConfig,
     updateIntakeField,
+    updateLlmSettingsField,
     handleInspectDataset,
     createDatasetConfig,
+    setAdvisorQuestion,
+    handleAskAdvisor,
+    handleRunCoachRecommendation,
+    handleSaveLlmSettings,
   } = context;
 
   if (activeView === "intake") {
@@ -802,6 +977,138 @@ function renderActiveView(context) {
     );
   }
 
+  if (activeView === "settings") {
+    return (
+      <section className="panel-stack">
+        <section className="panel">
+          <div className="section-label">LLM Settings</div>
+          <h3>Configure local runtime access</h3>
+          <p className="lead-copy">
+            These settings are stored locally for this checkout and are not written into tracked repo files.
+            Changes apply on the next advisor or coach request.
+          </p>
+          {llmSettings ? (
+            <>
+              <div className="intake-grid">
+                <label className="field">
+                  <span>Provider</span>
+                  <select
+                    value={llmSettings.provider ?? "ollama"}
+                    onChange={(event) => updateLlmSettingsField("provider", event.target.value)}
+                  >
+                    <option value="ollama">ollama</option>
+                    <option value="agent_cli">agent_cli</option>
+                    <option value="openai_compatible">openai_compatible</option>
+                    <option value="openai">openai</option>
+                  </select>
+                </label>
+                <label className="field">
+                  <span>Model</span>
+                  <input
+                    value={llmSettings.model ?? ""}
+                    onChange={(event) => updateLlmSettingsField("model", event.target.value)}
+                    placeholder="gpt-oss:20b"
+                  />
+                </label>
+                <label className="field field--full">
+                  <span>Use LLM In Bounded Loop Selection</span>
+                  <select
+                    value={String(Boolean(llmSettings.loop_llm_selection))}
+                    onChange={(event) => updateLlmSettingsField("loop_llm_selection", event.target.value === "true")}
+                  >
+                    <option value="true">true</option>
+                    <option value="false">false</option>
+                  </select>
+                </label>
+                {llmSettings.provider === "ollama" ? (
+                  <>
+                    <label className="field">
+                      <span>Ollama Base URL</span>
+                      <input
+                        value={llmSettings.ollama_base_url ?? ""}
+                        onChange={(event) => updateLlmSettingsField("ollama_base_url", event.target.value)}
+                        placeholder="http://localhost:11434"
+                      />
+                    </label>
+                    <label className="field">
+                      <span>Ollama API Key</span>
+                      <input
+                        type="password"
+                        value={llmSettings.ollama_api_key ?? ""}
+                        onChange={(event) => updateLlmSettingsField("ollama_api_key", event.target.value)}
+                        placeholder="only needed for direct Ollama cloud"
+                      />
+                    </label>
+                  </>
+                ) : null}
+                {llmSettings.provider === "agent_cli" ? (
+                  <label className="field field--full">
+                    <span>Agent CLI</span>
+                    <select
+                      value={llmSettings.agent_cli ?? "codex"}
+                      onChange={(event) => updateLlmSettingsField("agent_cli", event.target.value)}
+                    >
+                      <option value="codex">codex</option>
+                      <option value="claude">claude</option>
+                    </select>
+                  </label>
+                ) : null}
+                {llmSettings.provider === "openai_compatible" ? (
+                  <>
+                    <label className="field">
+                      <span>Compatible Base URL</span>
+                      <input
+                        value={llmSettings.openai_compatible_base_url ?? ""}
+                        onChange={(event) => updateLlmSettingsField("openai_compatible_base_url", event.target.value)}
+                        placeholder="https://provider.example/v1"
+                      />
+                    </label>
+                    <label className="field">
+                      <span>Compatible API Key</span>
+                      <input
+                        type="password"
+                        value={llmSettings.openai_compatible_api_key ?? ""}
+                        onChange={(event) => updateLlmSettingsField("openai_compatible_api_key", event.target.value)}
+                        placeholder="provider key"
+                      />
+                    </label>
+                  </>
+                ) : null}
+                {llmSettings.provider === "openai" ? (
+                  <label className="field field--full">
+                    <span>OpenAI API Key</span>
+                    <input
+                      type="password"
+                      value={llmSettings.openai_api_key ?? ""}
+                      onChange={(event) => updateLlmSettingsField("openai_api_key", event.target.value)}
+                      placeholder="OpenAI key"
+                    />
+                  </label>
+                ) : null}
+              </div>
+              <div className="form-actions">
+                <button
+                  type="button"
+                  className="action-button action-button--secondary"
+                  onClick={handleSaveLlmSettings}
+                  disabled={settingsBusy}
+                >
+                  {settingsBusy ? "Saving settings…" : "Save Settings"}
+                </button>
+              </div>
+              <div className="note-card">
+                <strong>Local storage path</strong>
+                <p>{llmSettings.storage_path}</p>
+              </div>
+            </>
+          ) : (
+            <p className="lead-copy">Loading current settings…</p>
+          )}
+        </section>
+      </section>
+    );
+  }
+
   if (activeView === "state") {
     if (!hasSelectedDataset) {
       return (
@@ -853,9 +1160,14 @@ function renderActiveView(context) {
                     <dd>{Object.keys(nextProposal.params_override ?? {}).length}</dd>
                   </div>
                 </dl>
+                <LlmReviewCard review={nextProposal.llm_review} />
                 <details className="detail-box">
                   <summary>Parameter overrides</summary>
                   <pre>{JSON.stringify(nextProposal.params_override, null, 2)}</pre>
+                </details>
+                <details className="detail-box">
+                  <summary>Proposal details</summary>
+                  <pre>{JSON.stringify(nextProposal, null, 2)}</pre>
                 </details>
               </>
             ) : (
@@ -863,6 +1175,89 @@ function renderActiveView(context) {
             )}
           </section>
         </div>
+
+        <section className="panel">
+          <div className="panel-header">
+            <div>
+              <div className="section-label">Research Coach</div>
+              <h3>Grounded LLM walkthrough</h3>
+            </div>
+            {advisor?.model ? <div className="pill">{advisor.model}</div> : null}
+          </div>
+          <p className="lead-copy">
+            Ask for a quick explanation of the current state. The coach only sees the config,
+            diagnosis, next proposal, and recent journal history. The coach is advisory; the bounded
+            loop review above is the part that can directly influence execution.
+          </p>
+          <div className="advisor-toolbar">
+            <label className="field field--full">
+              <span>Question</span>
+              <textarea
+                value={advisorQuestion}
+                onChange={(event) => setAdvisorQuestion(event.target.value)}
+                rows={2}
+              />
+            </label>
+            <button
+              type="button"
+              className="action-button action-button--secondary"
+              onClick={handleAskAdvisor}
+              disabled={advisorBusy}
+            >
+              {advisorBusy ? "Thinking…" : "Ask Research Coach"}
+            </button>
+          </div>
+          {advisor ? (
+            advisor.status === "available" ? (
+              <>
+                <div className="chip-group">
+                  <span className="chip">provider: {advisor.provider}</span>
+                  <span className="chip">diagnosis: {advisor.grounding?.diagnosis_tag ?? "n/a"}</span>
+                  <span className="chip">recent: {formatList(advisor.grounding?.recent_mutations)}</span>
+                </div>
+                <div className="advisor-copy">
+                  {splitParagraphs(advisor.answer).map((paragraph) => (
+                    <p key={paragraph}>{paragraph}</p>
+                  ))}
+                </div>
+                {advisor.recommended_proposal ? (
+                  <div className="note-card">
+                    <strong>Coach Recommendation</strong>
+                    <p>
+                      Run the bounded <code>{advisor.recommended_proposal.mutation_name}</code> template next.
+                    </p>
+                    <div className="chip-group">
+                      <span className="chip">risk: {advisor.recommended_proposal.risk_level}</span>
+                      <span className="chip">upside: {advisor.recommended_proposal.expected_upside}</span>
+                      <span className="chip">
+                        overrides: {Object.keys(advisor.recommended_proposal.params_override ?? {}).length}
+                      </span>
+                    </div>
+                    <LlmReviewCard review={advisor.recommended_proposal.llm_review} />
+                    <button
+                      type="button"
+                      className="action-button action-button--secondary"
+                      onClick={handleRunCoachRecommendation}
+                      disabled={busyAction !== ""}
+                    >
+                      {busyAction === "coach-recommendation" ? "Running coach recommendation…" : "Run Coach Recommendation"}
+                    </button>
+                  </div>
+                ) : null}
+              </>
+            ) : (
+              <div className="note-card">
+                <strong>Coach unavailable</strong>
+                <p>{advisor.message}</p>
+              </div>
+            )
+          ) : (
+            <div className="note-card">
+              <strong>No advice yet</strong>
+              <p>Run the coach when you want a grounded explanation of what the loop sees and what to try next.</p>
+            </div>
+          )}
+        </section>
       </section>
     );
   }
@@ -888,9 +1283,14 @@ function renderActiveView(context) {
               <div className="section-label">Run Journal</div>
               <h3>{journal.length} runs</h3>
             </div>
+            <PaginationControls
+              currentPage={journalPage}
+              totalPages={totalJournalPages}
+              onPageChange={setJournalPage}
+            />
           </div>
           <div className="run-list">
-            {journal.map((entry) => (
+            {paginatedJournal.map((entry) => (
               <button
                 key={entry.run_id}
                 type="button"
@@ -915,12 +1315,13 @@ function renderActiveView(context) {
           {activeRun ? (
             <>
               <h3>{activeRun.name}</h3>
-              <div className="signal-grid signal-grid--compact">
+              <div className="signal-grid signal-grid--compact signal-grid--inspector">
                 <SignalCard label="Metric" value={Number(activeRun.metric ?? 0).toFixed(4)} copy="Validation primary metric." />
                 <SignalCard label="Decision" value={activeRun.promoted ? "promote" : "reject"} copy={activeRun.decision_reason} />
                 <SignalCard label="Diagnosis" value={activeRun.diagnosis?.primary_tag ?? "n/a"} copy="Primary diagnosis tag." />
                 <SignalCard label="Readiness" value={activeRun.assessment?.implementation_readiness ?? "n/a"} copy="Current implementation-readiness label." />
               </div>
+              <LlmReviewCard review={activeRun.proposal?.llm_review ?? runDetail?.artifacts?.proposal?.llm_review} />
               <details className="detail-box" open>
                 <summary>Reason codes</summary>
                 <div className="code-pill-row">
@@ -936,6 +1337,10 @@ function renderActiveView(context) {
               <details className="detail-box">
                 <summary>Diagnosis</summary>
                 <pre>{JSON.stringify(activeRun.diagnosis, null, 2)}</pre>
+              </details>
+              <details className="detail-box">
+                <summary>Proposal</summary>
+                <pre>{JSON.stringify(activeRun.proposal ?? runDetail?.artifacts?.proposal ?? {}, null, 2)}</pre>
               </details>
               <details className="detail-box">
                 <summary>Summary markdown</summary>
@@ -982,6 +1387,64 @@ function SignalCard({ label, value, copy }) {
   );
 }
 
+function LlmReviewCard({ review }) {
+  if (!review || Object.keys(review).length === 0) {
+    return null;
+  }
+
+  const summary =
+    review.rationale ??
+    review.message ??
+    "No rationale was captured for this review.";
+  const integratedCopy =
+    review.status === "available"
+      ? "This review is already integrated into the bounded loop. Running the next step executes the selected proposal."
+      : "This review did not directly change execution, so Treehouse Lab kept the deterministic fallback proposal.";
+
+  return (
+    <div className="note-card note-card--tight">
+      <strong>Loop LLM Review</strong>
+      <div className="chip-group">
+        <span className="chip">status: {review.status ?? "n/a"}</span>
+        {review.provider ? <span className="chip">provider: {review.provider}</span> : null}
+        {review.model ? <span className="chip">model: {review.model}</span> : null}
+        {review.selected_proposal_id ? <span className="chip">selected: {review.selected_proposal_id}</span> : null}
+        {review.fallback_proposal_id ? <span className="chip">fallback: {review.fallback_proposal_id}</span> : null}
+      </div>
+      <p>{summary}</p>
+      <p className="detail-copy">{integratedCopy}</p>
+    </div>
+  );
+}
+
+function PaginationControls({ currentPage, totalPages, onPageChange }) {
+  if (totalPages <= 1) {
+    return null;
+  }
+
+  return (
+    <div className="pagination-controls">
+      <button
+        type="button"
+        className="action-button action-button--secondary"
+        onClick={() => onPageChange(Math.max(1, currentPage - 1))}
+        disabled={currentPage <= 1}
+      >
+        Previous
+      </button>
+      <div className="pill">Page {currentPage} of {totalPages}</div>
+      <button
+        type="button"
+        className="action-button action-button--secondary"
+        onClick={() => onPageChange(Math.min(totalPages, currentPage + 1))}
+        disabled={currentPage >= totalPages}
+      >
+        Next
+      </button>
+    </div>
+  );
+}
+
 function buildHeroCopy(activeView, hasSelectedDataset) {
   if (activeView === "state") {
     return {
@@ -1017,6 +1480,14 @@ function buildHeroCopy(activeView, hasSelectedDataset) {
       pills: ["diagnosis", "benchmark", "readiness"],
     };
   }
+  if (activeView === "settings") {
+    return {
+      kicker: "Settings",
+      title: "Configure local LLM access",
+      body: "Store provider settings locally for this checkout so advisor and coach requests can run without shell exports.",
+      pills: ["local only", "untracked file", "takes effect immediately"],
+    };
+  }
   return {
     kicker: "Dataset Intake",
     title: "Bring your dataset in first",
@@ -1024,6 +1495,7 @@ function buildHeroCopy(activeView, hasSelectedDataset) {
     pills: ["inspect", "create config", "run baseline"],
   };
 }
+
 
 function formatList(values) {
   if (!values || values.length === 0) {
@@ -1037,6 +1509,16 @@ function formatRate(value) {
     return "n/a";
   }
   return `${(Number(value) * 100).toFixed(1)}%`;
+}
+
+function splitParagraphs(text) {
+  if (!text) {
+    return [];
+  }
+  return text
+    .split(/\n\s*\n/g)
+    .map((paragraph) => paragraph.trim())
+    .filter(Boolean);
 }
 
 function suggestDatasetIdentity(pathValue) {

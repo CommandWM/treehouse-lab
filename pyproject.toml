@@ -32,6 +32,10 @@ web = [
   "fastapi>=0.115",
   "uvicorn>=0.34"
 ]
+llm = [
+  "openai>=1.0",
+  "requests>=2.32"
+]
 featuregen = [
   "openfe>=0.0.12",
   "featuretools>=1.31"

@@ -16,6 +16,7 @@ from treehouse_lab.config import load_experiment_config
 from treehouse_lab.datasets import DatasetSplit, load_dataset, split_dataset
 from treehouse_lab.diagnosis import build_reason_codes, diagnose_run_state
 from treehouse_lab.evaluation import assess_run
+from treehouse_lab.exporting import ExportedModelBundle, save_exported_model_bundle
 from treehouse_lab.journal import (
     append_journal_entry,
     ensure_run_directories,
@@ -87,7 +88,7 @@ class TreehouseLabRunner:
 
     def __init__(self, config_path: str | Path):
         self.config_path = Path(config_path).expanduser().resolve()
-        self.project_root = Path(__file__).resolve().parents[2]
+        self.project_root = self.config_path.parents[2] if len(self.config_path.parents) >= 3 else Path(__file__).resolve().parents[2]
         self.config = load_experiment_config(self.config_path)
         self.registry_key = self.config_path.stem
 
@@ -159,6 +160,9 @@ class TreehouseLabRunner:
             metrics=metrics,
             split_summary=split_summary,
             feature_names=list(split.X_train.columns),
+            target_name=dataset.target_name,
+            primary_metric=self.config.primary_metric,
+            preprocessor=split.preprocessor,
             model=model,
             backend=backend,
             runtime_seconds=runtime_seconds,
@@ -279,6 +283,9 @@ class TreehouseLabRunner:
         metrics: dict[str, float],
         split_summary: dict[str, float | int],
         feature_names: list[str],
+        target_name: str,
+        primary_metric: str,
+        preprocessor: Any,
         model: Any,
         backend: str,
         runtime_seconds: float,
@@ -299,6 +306,7 @@ class TreehouseLabRunner:
         diagnosis_path = artifact_dir / "diagnosis.json"
         summary_path = artifact_dir / "summary.md"
         importances_path = artifact_dir / "feature_importances.csv"
+        model_bundle_path = artifact_dir / "model_bundle.pkl"
         original_config_path = artifact_dir / self.config_path.name
 
         shutil.copy2(self.config_path, original_config_path)
@@ -317,6 +325,22 @@ class TreehouseLabRunner:
             }
         ).sort_values("importance", ascending=False)
         importance_frame.to_csv(importances_path, index=False)
+        save_exported_model_bundle(
+            ExportedModelBundle(
+                run_id=run_id,
+                registry_key=self.registry_key,
+                config_path=str(self.config_path),
+                target_name=target_name,
+                primary_metric=primary_metric,
+                backend=backend,
+                threshold=0.5,
+                feature_preprocessor=preprocessor,
+                model_params=params,
+                metrics=metrics,
+                model=model,
+            ),
+            model_bundle_path,
+        )
 
         summary_path.write_text(
             self._build_summary(

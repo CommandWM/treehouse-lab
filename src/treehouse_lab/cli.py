@@ -4,6 +4,7 @@ import argparse
 import json
 from pathlib import Path
 
+from treehouse_lab.exporting import export_model_artifact
 from treehouse_lab.loop import AutonomousLoopController
 from treehouse_lab.runner import TreehouseLabRunner
 
@@ -37,6 +38,11 @@ def build_parser() -> argparse.ArgumentParser:
     loop_parser = subparsers.add_parser("loop", help="Run the bounded autonomous research loop.")
     loop_parser.add_argument("config", type=Path, help="Path to the dataset config YAML.")
     loop_parser.add_argument("--steps", type=int, default=3, help="Maximum number of bounded loop steps to run.")
+
+    export_parser = subparsers.add_parser("export", help="Export the incumbent or a specific run as a reusable model bundle.")
+    export_parser.add_argument("config", type=Path, help="Path to the dataset config YAML.")
+    export_parser.add_argument("--run-id", default="", help="Optional run id to export instead of the current incumbent.")
+    export_parser.add_argument("--output-dir", type=Path, default=None, help="Optional destination directory for the exported bundle.")
 
     return parser
 
@@ -83,6 +89,15 @@ def main() -> None:
     elif args.command == "diagnose":
         controller = AutonomousLoopController(args.config)
         result = controller.diagnose().to_dict()
+    elif args.command == "export":
+        config_key = Path(args.config).expanduser().resolve().stem
+        project_root = Path(args.config).expanduser().resolve().parents[2]
+        result = export_model_artifact(
+            project_root=project_root,
+            config_key=config_key,
+            run_id=args.run_id or None,
+            output_dir=args.output_dir,
+        )
     else:
         controller = AutonomousLoopController(args.config)
         result = controller.run_loop(max_steps=args.steps).to_dict()

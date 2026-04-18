@@ -122,6 +122,7 @@ def _score_template(template: MutationTemplate, context: ProposalDecisionContext
     preferred_mutations = set(diagnosis.get("preferred_mutations", []))
     avoided_mutations = set(diagnosis.get("avoided_mutations", []))
     diagnosis_tags = set(diagnosis.get("tags", []))
+    recent_attempt_count, recent_reject_count, recent_deltas = _recent_template_stats(template.name, context.journal_entries)
 
     if template.name == "regularization_tighten":
         score += 0.7 if overfit_gap > 0.03 else -0.2
@@ -144,8 +145,12 @@ def _score_template(template: MutationTemplate, context: ProposalDecisionContext
     if "underfit" in diagnosis_tags and template.name == "regularization_tighten":
         score -= 0.7
 
-    if template.name in context.executed_mutation_types:
-        score -= 1.3
+    if recent_reject_count:
+        score -= min(2.8, 0.9 * recent_reject_count)
+    if recent_attempt_count and recent_reject_count == recent_attempt_count:
+        score -= 0.4
+    if len(recent_deltas) >= 2 and all(delta < context.promote_threshold for delta in recent_deltas[-2:]):
+        score -= 0.7
     return score
 
 
@@ -200,6 +205,29 @@ def _is_meaningful_change(incumbent_params: dict[str, Any], overrides: dict[str,
         if incumbent_params.get(key) != value:
             return True
     return False
+
+
+def _recent_template_stats(template_name: str, journal_entries: list[dict[str, Any]]) -> tuple[int, int, list[float]]:
+    attempt_count = 0
+    reject_count = 0
+    deltas: list[float] = []
+
+    for entry in journal_entries[-5:]:
+        proposal = entry.get("proposal", {})
+        mutation_type = entry.get("mutation_type") or proposal.get("mutation_type")
+        if mutation_type != template_name:
+            continue
+
+        attempt_count += 1
+        if not bool(entry.get("promoted")):
+            reject_count += 1
+
+        comparison = entry.get("comparison_to_incumbent", {})
+        delta = comparison.get("delta")
+        if delta is not None:
+            deltas.append(abs(float(delta)))
+
+    return attempt_count, reject_count, deltas
 
 
 def _bounded_int(value: int, bounds: list[Any]) -> int:

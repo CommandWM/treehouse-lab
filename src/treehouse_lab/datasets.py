@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from pathlib import Path
 
 import numpy as np
@@ -26,6 +26,7 @@ class DatasetSplit:
     y_train: pd.Series
     y_val: pd.Series
     y_test: pd.Series
+    preprocessor: FeaturePreprocessor
 
     def summary(self) -> dict[str, float | int]:
         return {
@@ -37,6 +38,18 @@ class DatasetSplit:
             "validation_positive_rate": float(self.y_val.mean()),
             "test_positive_rate": float(self.y_test.mean()),
         }
+
+
+@dataclass(slots=True)
+class FeaturePreprocessor:
+    input_columns: list[str]
+    numeric_columns: list[str]
+    categorical_columns: list[str]
+    fill_values: dict[str, float]
+    categorical_feature_names: list[str]
+
+    def to_dict(self) -> dict[str, object]:
+        return asdict(self)
 
 
 def load_dataset(config: ExperimentConfig, project_root: Path) -> DatasetBundle:
@@ -109,7 +122,10 @@ def split_dataset(bundle: DatasetBundle, config: ExperimentConfig) -> DatasetSpl
         random_state=config.seed,
         stratify=stratify_train_val,
     )
-    X_train, X_val, X_test = prepare_feature_frames(X_train_raw, X_val_raw, X_test)
+    preprocessor = fit_feature_preprocessor(X_train_raw)
+    X_train = transform_feature_frame(X_train_raw, preprocessor)
+    X_val = transform_feature_frame(X_val_raw, preprocessor)
+    X_test = transform_feature_frame(X_test, preprocessor)
 
     return DatasetSplit(
         X_train=X_train.reset_index(drop=True),
@@ -118,6 +134,7 @@ def split_dataset(bundle: DatasetBundle, config: ExperimentConfig) -> DatasetSpl
         y_train=y_train.reset_index(drop=True),
         y_val=y_val.reset_index(drop=True),
         y_test=y_test.reset_index(drop=True),
+        preprocessor=preprocessor,
     )
 
 
@@ -165,35 +182,55 @@ def prepare_feature_frames(
 ) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     """Fit preprocessing on train only to avoid split leakage."""
 
-    train_frame = X_train.reset_index(drop=True).copy()
-    val_frame = X_val.reset_index(drop=True).copy()
-    test_frame = X_test.reset_index(drop=True).copy()
+    preprocessor = fit_feature_preprocessor(X_train)
+    return (
+        transform_feature_frame(X_train, preprocessor),
+        transform_feature_frame(X_val, preprocessor),
+        transform_feature_frame(X_test, preprocessor),
+    )
 
+
+def fit_feature_preprocessor(frame: pd.DataFrame) -> FeaturePreprocessor:
+    train_frame = frame.reset_index(drop=True).copy()
     categorical_columns = list(train_frame.select_dtypes(include=["object", "category", "bool"]).columns)
     numeric_columns = [column for column in train_frame.columns if column not in categorical_columns]
 
     train_numeric = _prepare_numeric_frame(train_frame, numeric_columns)
-    fill_values = train_numeric.median(numeric_only=True).fillna(0.0)
-    val_numeric = _prepare_numeric_frame(val_frame, numeric_columns).fillna(fill_values)
-    test_numeric = _prepare_numeric_frame(test_frame, numeric_columns).fillna(fill_values)
-    train_numeric = train_numeric.fillna(fill_values)
-
+    fill_values = {
+        str(column): float(value)
+        for column, value in train_numeric.median(numeric_only=True).fillna(0.0).items()
+    }
     train_categorical = _prepare_categorical_frame(train_frame, categorical_columns)
-    categorical_feature_names = list(train_categorical.columns)
-    val_categorical = _prepare_categorical_frame(val_frame, categorical_columns).reindex(
-        columns=categorical_feature_names,
-        fill_value=0,
+
+    return FeaturePreprocessor(
+        input_columns=list(train_frame.columns),
+        numeric_columns=numeric_columns,
+        categorical_columns=categorical_columns,
+        fill_values=fill_values,
+        categorical_feature_names=list(train_categorical.columns),
     )
-    test_categorical = _prepare_categorical_frame(test_frame, categorical_columns).reindex(
-        columns=categorical_feature_names,
+
+
+def transform_feature_frame(frame: pd.DataFrame, preprocessor: FeaturePreprocessor) -> pd.DataFrame:
+    feature_frame = frame.reset_index(drop=True).copy()
+    missing_columns = [column for column in preprocessor.input_columns if column not in feature_frame.columns]
+    if missing_columns:
+        msg = f"Missing required feature columns: {', '.join(missing_columns)}"
+        raise ValueError(msg)
+
+    feature_frame = feature_frame.loc[:, preprocessor.input_columns]
+    numeric_frame = _prepare_numeric_frame(feature_frame, preprocessor.numeric_columns)
+    numeric_frame = numeric_frame.reindex(columns=preprocessor.numeric_columns, fill_value=0.0)
+    if preprocessor.numeric_columns:
+        fill_values = pd.Series(preprocessor.fill_values)
+        numeric_frame = numeric_frame.fillna(fill_values)
+
+    categorical_frame = _prepare_categorical_frame(feature_frame, preprocessor.categorical_columns).reindex(
+        columns=preprocessor.categorical_feature_names,
         fill_value=0,
     )
 
-    return (
-        pd.concat([train_numeric, train_categorical], axis=1),
-        pd.concat([val_numeric, val_categorical], axis=1),
-        pd.concat([test_numeric, test_categorical], axis=1),
-    )
+    return pd.concat([numeric_frame, categorical_frame], axis=1)
 
 
 def _prepare_numeric_frame(frame: pd.DataFrame, columns: list[str]) -> pd.DataFrame:

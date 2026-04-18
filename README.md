@@ -133,6 +133,96 @@ npm run dev
 
 The React UI is the preferred path for the richer guided interface. Streamlit can remain as a lightweight fallback while the React surface evolves.
 
+To enable the optional grounded research coach in the Current State view:
+
+```bash
+pip install -e '.[web,llm]'
+```
+
+You can now manage LLM provider settings from the React UI under `Settings`. Treehouse Lab stores those values in a local untracked file at `.treehouse_lab/llm_settings.json`, and the next advisor or coach request will pick them up immediately. This is the preferred path if you want to rotate keys without bouncing back to shell exports.
+
+Treehouse Lab now supports three LLM interaction paths for the advisor:
+
+1. `ollama`
+2. `agent_cli` for Claude Code or Codex
+3. `openai_compatible`
+
+`openai` remains available as a direct shortcut for the native OpenAI API.
+
+## Path 1: Ollama
+
+Default path: local Ollama.
+
+```bash
+export TREEHOUSE_LAB_LLM_PROVIDER=ollama
+export TREEHOUSE_LAB_OLLAMA_BASE_URL=http://localhost:11434
+export TREEHOUSE_LAB_LLM_MODEL=gemma3:4b
+```
+
+To let the bounded autonomous loop use the LLM to choose among eligible candidates instead of only showing post-hoc advice:
+
+```bash
+export TREEHOUSE_LAB_LOOP_LLM_SELECTION=true
+```
+
+That selection pass is still bounded: Treehouse Lab generates the candidate mutations deterministically first, then the LLM chooses from that explicit candidate list and records its rationale.
+
+If you want to use signed-in Ollama cloud models without giving Treehouse Lab an API key, sign in through the local Ollama daemon and point the coach at a cloud model name:
+
+```bash
+ollama signin
+export TREEHOUSE_LAB_LLM_MODEL=gpt-oss:120b-cloud
+```
+
+If you want to call Ollama cloud directly instead, point the base URL at `https://ollama.com` and set `OLLAMA_API_KEY`:
+
+```bash
+export TREEHOUSE_LAB_OLLAMA_BASE_URL=https://ollama.com
+export OLLAMA_API_KEY=your_key_here
+export TREEHOUSE_LAB_LLM_MODEL=glm-4.6
+```
+
+## Path 2: Claude Code Or Codex
+
+Use a local coding-agent CLI as the advisor backend:
+
+```bash
+export TREEHOUSE_LAB_LLM_PROVIDER=agent_cli
+export TREEHOUSE_LAB_AGENT_CLI=codex
+export TREEHOUSE_LAB_LLM_MODEL=gpt-5.4-mini
+```
+
+Or:
+
+```bash
+export TREEHOUSE_LAB_LLM_PROVIDER=agent_cli
+export TREEHOUSE_LAB_AGENT_CLI=claude
+export TREEHOUSE_LAB_LLM_MODEL=sonnet
+```
+
+The Codex path runs `codex exec` in read-only mode. The Claude path runs `claude -p` with tools disabled, so both stay in explanation mode instead of editing the repo.
+
+## Path 3: OpenAI-Compatible API
+
+For any service that exposes an OpenAI-compatible chat endpoint:
+
+```bash
+export TREEHOUSE_LAB_LLM_PROVIDER=openai_compatible
+export TREEHOUSE_LAB_OPENAI_COMPATIBLE_BASE_URL=https://your-provider.example/v1
+export TREEHOUSE_LAB_OPENAI_COMPATIBLE_API_KEY=your_key_here
+export TREEHOUSE_LAB_LLM_MODEL=provider/model
+```
+
+## Direct OpenAI Shortcut
+
+If you want the native OpenAI API directly:
+
+```bash
+export TREEHOUSE_LAB_LLM_PROVIDER=openai
+export OPENAI_API_KEY=your_key_here
+export TREEHOUSE_LAB_LLM_MODEL=gpt-5.4-mini
+```
+
 If your local XGBoost install cannot load, for example because `libomp` is missing on macOS, the runner falls back to sklearn gradient boosting so the examples remain runnable.
 
 ## CLI commands
@@ -144,8 +234,61 @@ Treehouse Lab currently exposes four core commands:
 - `treehouse-lab propose <config>`: inspect the next deterministic proposal without executing it
 - `treehouse-lab diagnose <config>`: inspect the current diagnosis plus the next bounded proposal
 - `treehouse-lab loop <config> --steps N`: run a short autonomous research cycle with promote/reject decisions and narratives
+- `treehouse-lab export <config>`: package the incumbent as a reusable model artifact with optional scoring and container wrappers
 
 The important distinction is that `diagnose`, `propose`, and `loop` do not freestyle. They operate inside explicit mutation templates and the declared search space in `configs/search_space.yaml`.
+
+## Exporting a model
+
+Each run now writes a reusable `model_bundle.pkl` artifact containing:
+
+- the trained model
+- the fitted preprocessing contract from the training split
+- the primary metric, params, and run metadata
+
+To export the current incumbent for a dataset into a small handoff package:
+
+```bash
+treehouse-lab export configs/datasets/bank-valid-test.yaml
+```
+
+By default this writes to `exports/<config-key>/<run-id>/` and includes:
+
+- `model_bundle.pkl`
+- `app.py` with a minimal FastAPI `/predict` endpoint
+- `Dockerfile` for containerizing that optional scorer
+- `requirements.txt`
+- `manifest.json`
+
+The important point is that `model_bundle.pkl` is the primary handoff artifact. Consumers can either load that bundle directly in Python or use the generated API/container wrapper if that is more convenient.
+
+Load the artifact directly:
+
+```python
+from treehouse_lab.exporting import load_exported_model_bundle
+
+bundle = load_exported_model_bundle("exports/bank-valid-test/<run-id>/model_bundle.pkl")
+print(bundle.feature_preprocessor.input_columns)
+# Pass records that include all expected input columns.
+predictions = bundle.predict_records([...])
+```
+
+Run the optional scorer locally:
+
+```bash
+cd exports/bank-valid-test/<run-id>
+uvicorn app:app --host 0.0.0.0 --port 8000
+```
+
+Build the optional container image:
+
+```bash
+cd exports/bank-valid-test/<run-id>
+docker build -t treehouse-lab-export .
+docker run --rm -p 8000:8000 treehouse-lab-export
+```
+
+This is intentionally simple and Python-specific. It is meant as an exportable handoff package, not a hardened model-serving platform.
 
 ## Included examples
 

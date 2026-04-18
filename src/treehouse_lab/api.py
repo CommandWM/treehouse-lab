@@ -13,8 +13,20 @@ import yaml
 
 from treehouse_lab.config import load_experiment_config
 from treehouse_lab.datasets import inspect_binary_target
+from treehouse_lab.exporting import export_model_artifact
 from treehouse_lab.journal import load_incumbent, load_journal_entries, load_run_entry
+from treehouse_lab.llm import (
+    DEFAULT_ADVISOR_PROVIDER,
+    DEFAULT_ADVISOR_QUESTION,
+    DEFAULT_AGENT_CLI,
+    DEFAULT_OLLAMA_BASE_URL,
+    DEFAULT_OLLAMA_MODEL,
+    DEFAULT_OPENAI_COMPATIBLE_MODEL,
+    DEFAULT_OPENAI_MODEL,
+    generate_research_advice,
+)
 from treehouse_lab.loop import AutonomousLoopController
+from treehouse_lab.runtime_settings import effective_llm_settings, llm_settings_path, save_llm_settings
 from treehouse_lab.runner import DEFAULT_MODEL_PARAMS, TreehouseLabRunner
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -60,6 +72,31 @@ class DatasetCreateRequest(BaseModel):
     validation_size: float = Field(default=0.2, gt=0, lt=1)
     test_size: float = Field(default=0.2, gt=0, lt=1)
     stratify: bool = True
+
+
+class AdvisorRequest(BaseModel):
+    question: str = Field(default=DEFAULT_ADVISOR_QUESTION, min_length=1, max_length=500)
+
+
+class CoachRecommendationRunRequest(BaseModel):
+    mutation_type: str = Field(min_length=1)
+
+
+class ExportRequest(BaseModel):
+    run_id: str | None = None
+    output_dir: str | None = None
+
+
+class LlmSettingsRequest(BaseModel):
+    provider: str = ""
+    model: str = ""
+    loop_llm_selection: bool = False
+    ollama_base_url: str = ""
+    ollama_api_key: str = ""
+    agent_cli: str = ""
+    openai_compatible_base_url: str = ""
+    openai_compatible_api_key: str = ""
+    openai_api_key: str = ""
 
 
 def _config_path_from_key(config_key: str) -> Path:
@@ -272,6 +309,74 @@ def _serialize_state(config_key: str) -> dict[str, Any]:
     }
 
 
+def _serialize_advisor_entry(entry: dict[str, Any]) -> dict[str, Any]:
+    proposal = entry.get("proposal", {})
+    comparison = entry.get("comparison_to_incumbent", {})
+    assessment = entry.get("assessment", {})
+    diagnosis = entry.get("diagnosis", {})
+    return {
+        "run_id": entry.get("run_id"),
+        "name": entry.get("name"),
+        "metric": entry.get("metric"),
+        "promoted": entry.get("promoted"),
+        "delta": comparison.get("delta"),
+        "threshold": comparison.get("threshold"),
+        "benchmark_status": assessment.get("benchmark_status"),
+        "implementation_readiness": assessment.get("implementation_readiness"),
+        "summary": diagnosis.get("summary") or entry.get("decision_reason"),
+        "reason_codes": entry.get("reason_codes", []),
+        "proposal": {
+            "mutation_type": proposal.get("mutation_type"),
+            "mutation_name": proposal.get("mutation_name"),
+            "params_override": proposal.get("params_override", {}),
+        },
+    }
+
+
+def _build_advisor_context(config_key: str) -> dict[str, Any]:
+    config_path = _config_path_from_key(config_key)
+    controller = AutonomousLoopController(config_path)
+    journal_entries = load_journal_entries(PROJECT_ROOT, config_key)
+    recent_entries = [_serialize_advisor_entry(entry) for entry in journal_entries[-5:]]
+    return {
+        "dataset_key": config_key,
+        "project_root": str(PROJECT_ROOT),
+        "config": _serialize_config(config_key),
+        "incumbent": load_incumbent(PROJECT_ROOT, config_key),
+        "diagnosis_preview": controller.diagnose().to_dict(),
+        "journal_count": len(journal_entries),
+        "recent_entries": recent_entries,
+    }
+
+
+def _build_coach_recommendation(config_key: str) -> dict[str, Any] | None:
+    config_path = _config_path_from_key(config_key)
+    controller = AutonomousLoopController(config_path)
+    proposal = controller.recommend_coach_proposal()
+    return None if proposal is None else proposal.to_dict()
+
+
+def _serialize_llm_settings() -> dict[str, Any]:
+    defaults = {
+        "provider": DEFAULT_ADVISOR_PROVIDER,
+        "model": DEFAULT_OLLAMA_MODEL,
+        "loop_llm_selection": False,
+        "ollama_base_url": DEFAULT_OLLAMA_BASE_URL,
+        "ollama_api_key": "",
+        "agent_cli": DEFAULT_AGENT_CLI,
+        "openai_compatible_base_url": "",
+        "openai_compatible_api_key": "",
+        "openai_api_key": "",
+    }
+    payload = effective_llm_settings(PROJECT_ROOT, defaults)
+    if payload["provider"] == "openai_compatible" and payload["model"] == DEFAULT_OLLAMA_MODEL:
+        payload["model"] = DEFAULT_OPENAI_COMPATIBLE_MODEL
+    if payload["provider"] == "openai" and payload["model"] == DEFAULT_OLLAMA_MODEL:
+        payload["model"] = DEFAULT_OPENAI_MODEL
+    payload["storage_path"] = str(llm_settings_path(PROJECT_ROOT))
+    return payload
+
+
 @app.get("/api/health")
 def health() -> dict[str, str]:
     return {"status": "ok"}
@@ -339,6 +444,17 @@ def get_glossary() -> list[dict[str, str]]:
     return _load_glossary_sections()
 
 
+@app.get("/api/settings/llm")
+def get_llm_settings() -> dict[str, Any]:
+    return _serialize_llm_settings()
+
+
+@app.post("/api/settings/llm")
+def update_llm_settings(payload: LlmSettingsRequest) -> dict[str, Any]:
+    save_llm_settings(PROJECT_ROOT, payload.model_dump())
+    return _serialize_llm_settings()
+
+
 @app.post("/api/intake/inspect")
 def inspect_dataset(payload: DatasetInspectRequest) -> dict[str, Any]:
     dataset_path, frame = _read_csv_frame(payload.path)
@@ -398,6 +514,59 @@ def run_loop(config_key: str, payload: LoopRequest) -> dict[str, Any]:
     config_path = _config_path_from_key(config_key)
     controller = AutonomousLoopController(config_path)
     return controller.run_loop(max_steps=payload.steps).to_dict()
+
+
+@app.post("/api/configs/{config_key}/export")
+def export_model(config_key: str, payload: ExportRequest) -> dict[str, Any]:
+    _config_path_from_key(config_key)
+    try:
+        return export_model_artifact(
+            project_root=PROJECT_ROOT,
+            config_key=config_key,
+            run_id=payload.run_id,
+            output_dir=payload.output_dir,
+        )
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except FileExistsError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+
+@app.post("/api/configs/{config_key}/advisor")
+def run_advisor(config_key: str, payload: AdvisorRequest) -> dict[str, Any]:
+    context = _build_advisor_context(config_key)
+    response = generate_research_advice(context, question=payload.question)
+    response.recommended_proposal = _build_coach_recommendation(config_key)
+    return response.to_dict()
+
+
+@app.post("/api/configs/{config_key}/coach-recommendation/run")
+def run_coach_recommendation(config_key: str, payload: CoachRecommendationRunRequest) -> dict[str, Any]:
+    config_path = _config_path_from_key(config_key)
+    controller = AutonomousLoopController(config_path)
+    mutation_type = payload.mutation_type.strip()
+
+    if mutation_type == "baseline":
+        result = controller.ensure_incumbent()
+        if result is None:
+            raise HTTPException(status_code=409, detail="A baseline incumbent already exists for this dataset.")
+        return {
+            "step_index": 0,
+            "proposal": {
+                "mutation_type": "baseline",
+                "mutation_name": "baseline",
+            },
+            "result": result.to_dict(),
+            "narrative_path": str(Path(result.artifact_dir) / "narrative.md"),
+        }
+
+    proposal = controller.proposal_for_mutation_type(mutation_type)
+    if proposal is None:
+        raise HTTPException(
+            status_code=409,
+            detail=f"Mutation '{mutation_type}' is not an eligible bounded coach recommendation right now.",
+        )
+    return controller.execute_proposal_step(proposal, preview_follow_up=True).to_dict()
 
 
 def main() -> None:

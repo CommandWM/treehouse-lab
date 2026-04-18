@@ -16,7 +16,8 @@ from treehouse_lab.journal import (
     load_run_entry,
     update_journal_entry,
 )
-from treehouse_lab.mutations import generate_candidates
+from treehouse_lab.llm import llm_loop_selection_enabled, select_bounded_proposal
+from treehouse_lab.mutations import MutationCandidate, generate_candidates
 from treehouse_lab.narratives import build_loop_summary, build_run_narrative, render_markdown
 from treehouse_lab.proposals import ExperimentProposal, ProposalDecisionContext, build_baseline_proposal
 from treehouse_lab.runner import ExperimentResult, TreehouseLabRunner
@@ -94,9 +95,44 @@ class AutonomousLoopController:
         return result
 
     def choose_next_proposal(self, loop_step_index: int, loop_history: list[LoopStepResult]) -> ExperimentProposal | None:
-        context = self._build_context(loop_step_index, loop_history)
-        candidates = generate_candidates(context)
-        return candidates[0].proposal if candidates else None
+        context, candidates = self._candidate_bundle(loop_step_index, loop_history)
+        if not candidates:
+            return None
+        return self._select_candidate(context, candidates)
+
+    def recommend_coach_proposal(self, loop_step_index: int = 0, loop_history: list[LoopStepResult] | None = None) -> ExperimentProposal | None:
+        if load_incumbent(self.project_root, self.registry_key) is None:
+            proposal = build_baseline_proposal(self.registry_key, self.config.hypothesis)
+            proposal.llm_review = {
+                "status": "not_applicable",
+                "message": "No incumbent exists yet, so the coach recommendation is to establish the baseline first.",
+            }
+            return proposal
+
+        history = [] if loop_history is None else loop_history
+        context, candidates = self._candidate_bundle(loop_step_index, history)
+        if not candidates:
+            return None
+        return self._select_candidate(context, candidates, force_llm=True)
+
+    def proposal_for_mutation_type(
+        self,
+        mutation_type: str,
+        loop_step_index: int = 0,
+        loop_history: list[LoopStepResult] | None = None,
+    ) -> ExperimentProposal | None:
+        normalized_mutation_type = mutation_type.strip()
+        if normalized_mutation_type == "baseline":
+            if load_incumbent(self.project_root, self.registry_key) is None:
+                return build_baseline_proposal(self.registry_key, self.config.hypothesis)
+            return None
+
+        history = [] if loop_history is None else loop_history
+        _, candidates = self._candidate_bundle(loop_step_index, history)
+        for candidate in candidates:
+            if candidate.proposal.mutation_type == normalized_mutation_type:
+                return candidate.proposal
+        return None
 
     def run_proposal(self, proposal: ExperimentProposal) -> ExperimentResult:
         metadata = {
@@ -123,6 +159,57 @@ class AutonomousLoopController:
         proposal = self.choose_next_proposal(loop_step_index, loop_history)
         return proposal.to_dict() if proposal is not None else None
 
+    def execute_proposal_step(
+        self,
+        proposal: ExperimentProposal,
+        loop_step_index: int = 0,
+        loop_history: list[LoopStepResult] | None = None,
+        preview_follow_up: bool = True,
+    ) -> LoopStepResult:
+        history = [] if loop_history is None else loop_history
+        incumbent_before = load_incumbent(self.project_root, self.registry_key)
+        result = self.run_proposal(proposal)
+
+        next_preview = None
+        if preview_follow_up:
+            preview_step = LoopStepResult(
+                step_index=loop_step_index,
+                proposal=proposal.to_dict(),
+                result=result.to_dict(),
+                narrative_path="",
+            )
+            next_preview = self.preview_next_proposal(loop_step_index + 1, history + [preview_step])
+
+        next_step_text = None if next_preview is None else next_preview["mutation_name"]
+        narrative = build_run_narrative(proposal, result, incumbent_before, recommended_next_step=next_step_text)
+        narrative_path = self._write_run_narrative(result, proposal, narrative)
+
+        update_journal_entry(
+            self.project_root,
+            result.run_id,
+            {
+                "registry_key": self.registry_key,
+                "proposal": proposal.to_dict(),
+                "narrative": narrative.to_dict(),
+                "recommended_next_step": next_preview,
+            },
+        )
+
+        result.metadata.update(
+            {
+                "proposal": proposal.to_dict(),
+                "narrative": narrative.to_dict(),
+                "recommended_next_step": next_preview,
+            }
+        )
+
+        return LoopStepResult(
+            step_index=loop_step_index,
+            proposal=proposal.to_dict(),
+            result=result.to_dict(),
+            narrative_path=str(narrative_path),
+        )
+
     def run_loop(self, max_steps: int = 3) -> LoopSummary:
         loop_dir = self._loop_dir()
         loop_dir.mkdir(parents=True, exist_ok=True)
@@ -137,45 +224,11 @@ class AutonomousLoopController:
                 stop_reason = "No eligible bounded proposal remained."
                 break
 
-            incumbent_before = load_incumbent(self.project_root, self.registry_key)
-            result = self.run_proposal(proposal)
-            next_preview = None
-            if loop_step_index + 1 < max_steps:
-                preview_step = LoopStepResult(
-                    step_index=loop_step_index,
-                    proposal=proposal.to_dict(),
-                    result=result.to_dict(),
-                    narrative_path="",
-                )
-                next_preview = self.preview_next_proposal(loop_step_index + 1, history + [preview_step])
-            next_step_text = None if next_preview is None else next_preview["mutation_name"]
-            narrative = build_run_narrative(proposal, result, incumbent_before, recommended_next_step=next_step_text)
-            narrative_path = self._write_run_narrative(result, proposal, narrative)
-
-            update_journal_entry(
-                self.project_root,
-                result.run_id,
-                {
-                    "registry_key": self.registry_key,
-                    "proposal": proposal.to_dict(),
-                    "narrative": narrative.to_dict(),
-                    "recommended_next_step": next_preview,
-                },
-            )
-
-            result.metadata.update(
-                {
-                    "proposal": proposal.to_dict(),
-                    "narrative": narrative.to_dict(),
-                    "recommended_next_step": next_preview,
-                }
-            )
-
-            step = LoopStepResult(
-                step_index=loop_step_index,
-                proposal=proposal.to_dict(),
-                result=result.to_dict(),
-                narrative_path=str(narrative_path),
+            step = self.execute_proposal_step(
+                proposal,
+                loop_step_index=loop_step_index,
+                loop_history=history,
+                preview_follow_up=loop_step_index + 1 < max_steps,
             )
             history.append(step)
 
@@ -229,6 +282,84 @@ class AutonomousLoopController:
             diagnosis=context.diagnosis,
             next_proposal=None if next_proposal is None else next_proposal.to_dict(),
         )
+
+    def _select_candidate(
+        self,
+        context: ProposalDecisionContext,
+        candidates: list[Any],
+        force_llm: bool = False,
+    ) -> ExperimentProposal:
+        top_proposal = candidates[0].proposal
+        if not force_llm and not llm_loop_selection_enabled(self.project_root):
+            top_proposal.llm_review = {
+                "status": "disabled",
+                "message": "LLM loop selection is disabled, so Treehouse Lab used deterministic candidate ranking.",
+                "candidate_count": len(candidates),
+            }
+            return top_proposal
+
+        selection_context = {
+            "dataset_key": context.dataset_key,
+            "project_root": str(self.project_root),
+            "diagnosis": context.diagnosis,
+            "promote_threshold": context.promote_threshold,
+            "incumbent": {
+                "run_id": context.incumbent_run_id,
+                "metric": context.incumbent_metric,
+                "params": context.incumbent_params,
+                "metrics": context.incumbent_metrics,
+                "split_summary": context.split_summary,
+            },
+            "recent_entries": [
+                {
+                    "name": entry.get("name"),
+                    "promoted": entry.get("promoted"),
+                    "delta": entry.get("comparison_to_incumbent", {}).get("delta"),
+                    "mutation_type": entry.get("proposal", {}).get("mutation_type") or entry.get("mutation_type"),
+                    "summary": entry.get("diagnosis", {}).get("summary") or entry.get("decision_reason"),
+                }
+                for entry in context.journal_entries[-5:]
+            ],
+        }
+        selection_candidates = [
+            {
+                "proposal_id": candidate.proposal.proposal_id,
+                "mutation_type": candidate.proposal.mutation_type,
+                "mutation_name": candidate.proposal.mutation_name,
+                "score": candidate.proposal.score,
+                "hypothesis": candidate.proposal.hypothesis,
+                "rationale": candidate.proposal.rationale,
+                "risk_level": candidate.proposal.risk_level,
+                "expected_upside": candidate.proposal.expected_upside,
+                "params_override": candidate.proposal.params_override,
+            }
+            for candidate in candidates
+        ]
+
+        selection = select_bounded_proposal(selection_context, selection_candidates)
+        selected = next(
+            (candidate.proposal for candidate in candidates if candidate.proposal.proposal_id == selection.selected_proposal_id),
+            None,
+        )
+        if selected is None:
+            top_proposal.llm_review = {
+                **selection.to_dict(),
+                "status": "fallback",
+                "fallback_proposal_id": top_proposal.proposal_id,
+            }
+            return top_proposal
+
+        selected.llm_review = selection.to_dict()
+        return selected
+
+    def _candidate_bundle(
+        self,
+        loop_step_index: int,
+        loop_history: list[LoopStepResult],
+    ) -> tuple[ProposalDecisionContext, list[MutationCandidate]]:
+        context = self._build_context(loop_step_index, loop_history)
+        candidates = generate_candidates(context)
+        return context, candidates
 
     def _build_context(self, loop_step_index: int, loop_history: list[LoopStepResult]) -> ProposalDecisionContext:
         incumbent = load_incumbent(self.project_root, self.registry_key)
