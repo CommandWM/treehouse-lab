@@ -6,7 +6,7 @@
 
 Treehouse Lab is a Karpathy-style autoresearch loop for tabular machine learning.
 
-Current checkpoint: `v0.9`. The research engine, benchmark pack, diagnosis layer, and React UI surface now support dataset-first intake and a cleaner workbench flow, but broader evaluation hardening and onboarding still need to mature before a `v1` label would be justified.
+Current checkpoint: `v1.0.0`. The repo now has a real end-to-end local workflow: dataset-first intake, bounded autoresearch loops, grounded LLM assistance, coach-triggered bounded execution, local settings for provider credentials, and exportable model artifacts with optional container packaging.
 
 The idea is simple: give an agent a constrained playground around XGBoost-style models, let it propose experiments, run them safely, keep only the winners, and leave behind a readable research log instead of a pile of notebook debris.
 
@@ -28,6 +28,23 @@ Treehouse Lab is aimed at that gap.
 - **Evaluation is sacred.** No leakage, no test-set gaming, no notebook nonsense.
 - **Promotion must be earned.** A run only wins if it beats the incumbent under the agreed metric and guardrails.
 - **Every run tells a story.** Outputs should be understandable by a human reviewing them later.
+
+## V1 status
+
+Version 1 is intentionally practical rather than broad. It now covers:
+
+- dataset-first config intake for local CSV-backed tabular problems
+- bounded baseline, candidate, diagnose, propose, and loop workflows
+- React workbench for current state, journal inspection, settings, and coaching
+- optional LLM guidance through Ollama, Claude Code or Codex, and OpenAI-compatible APIs
+- structured coach recommendations that can trigger valid bounded runs
+- exportable model artifacts with optional FastAPI and Docker wrappers
+
+What it still does not try to be:
+
+- a hosted training platform
+- an unconstrained agent that edits the search space on its own
+- a hardened production serving stack
 
 ## Initial scope
 
@@ -65,7 +82,7 @@ This repository now includes a real runnable slice:
 - a Streamlit demo UI in `app.py`
 - benchmark-pack configs for smoke, stress, and implementation-like evaluation
 
-This is still an MVP, but it is no longer just scaffolding. You can now establish incumbents, inspect the next bounded proposal, run a short autonomous loop, and review the resulting narratives and artifacts.
+This is now the `v1` slice. You can establish incumbents, inspect the next bounded proposal, run a short autonomous loop, use the research coach, execute bounded coach recommendations, and export a trained model as a reusable handoff package.
 
 ## Quickstart
 
