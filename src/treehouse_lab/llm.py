@@ -25,6 +25,7 @@ DEFAULT_ADVISOR_PROVIDER = "ollama"
 DEFAULT_ADVISOR_QUESTION = "What should I do next and why?"
 DEFAULT_OLLAMA_MODEL = "gemma3:4b"
 DEFAULT_OLLAMA_BASE_URL = "http://localhost:11434"
+OLLAMA_API_KEY_ENV_VARS = ("OLLAMA_API_KEY", "OLLAMA_CLOUD_KEY", "VIOLAAMA_CLOUD_KEY")
 DEFAULT_AGENT_CLI = "codex"
 DEFAULT_OPENAI_COMPATIBLE_MODEL = "gpt-4.1-mini"
 DEFAULT_OPENAI_MODEL = "gpt-5.4-mini"
@@ -197,7 +198,10 @@ def _request_text_via_ollama(system_prompt: str, user_prompt: str, purpose: str,
                 status="unavailable",
                 provider="ollama",
                 model=model,
-                message=f"Set OLLAMA_API_KEY to use Ollama cloud directly for {purpose}, or point TREEHOUSE_LAB_OLLAMA_BASE_URL at a local Ollama host.",
+                message=(
+                    f"Set one of {', '.join(OLLAMA_API_KEY_ENV_VARS)} to use Ollama cloud directly for {purpose}, "
+                    "or point TREEHOUSE_LAB_OLLAMA_BASE_URL at a local Ollama host."
+                ),
             )
         headers["Authorization"] = f"Bearer {api_key}"
 
@@ -560,21 +564,25 @@ def _setting(name: str, project_root: str, default: str = "") -> str:
     if setting_value:
         return setting_value
 
-    env_map = {
+    env_map: dict[str, str | tuple[str, ...]] = {
         "provider": "TREEHOUSE_LAB_LLM_PROVIDER",
         "model": "TREEHOUSE_LAB_LLM_MODEL",
         "ollama_base_url": "TREEHOUSE_LAB_OLLAMA_BASE_URL",
-        "ollama_api_key": "OLLAMA_API_KEY",
+        "ollama_api_key": OLLAMA_API_KEY_ENV_VARS,
         "agent_cli": "TREEHOUSE_LAB_AGENT_CLI",
         "openai_compatible_base_url": "TREEHOUSE_LAB_OPENAI_COMPATIBLE_BASE_URL",
         "openai_compatible_api_key": "TREEHOUSE_LAB_OPENAI_COMPATIBLE_API_KEY",
         "openai_api_key": "OPENAI_API_KEY",
     }
     env_name = env_map.get(name)
-    if env_name:
+    if isinstance(env_name, tuple):
+        env_value = _resolve_first_env(env_name)
+    elif isinstance(env_name, str):
         env_value = os.getenv(env_name, "").strip()
-        if env_value:
-            return env_value
+    else:
+        env_value = ""
+    if env_value:
+        return env_value
     return default.strip()
 
 
@@ -668,3 +676,11 @@ def _is_local_base_url(base_url: str) -> bool:
 
 def _truthy(value: str) -> bool:
     return value.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _resolve_first_env(env_names: tuple[str, ...]) -> str:
+    for env_name in env_names:
+        env_value = os.getenv(env_name, "").strip()
+        if env_value:
+            return env_value
+    return ""
