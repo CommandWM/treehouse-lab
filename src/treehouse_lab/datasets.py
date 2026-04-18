@@ -72,7 +72,8 @@ def load_dataset(config: ExperimentConfig, project_root: Path) -> DatasetBundle:
             raise ValueError(msg)
         csv_path = (project_root / source.path).resolve()
         frame = pd.read_csv(csv_path)
-        target = frame.pop(source.target_column).astype(int)
+        raw_target = frame.pop(source.target_column)
+        target, _ = normalize_binary_target(raw_target, source.target_column)
         return DatasetBundle(
             frame=frame.copy(),
             target=target,
@@ -118,6 +119,43 @@ def split_dataset(bundle: DatasetBundle, config: ExperimentConfig) -> DatasetSpl
         y_val=y_val.reset_index(drop=True),
         y_test=y_test.reset_index(drop=True),
     )
+
+
+def normalize_binary_target(series: pd.Series, column_name: str) -> tuple[pd.Series, dict[str, object]]:
+    if series.isna().any():
+        msg = f"Target column '{column_name}' contains missing values."
+        raise ValueError(msg)
+
+    unique_values = list(pd.unique(series))
+    if len(unique_values) != 2:
+        msg = f"Target column '{column_name}' must contain exactly 2 distinct labels for binary classification."
+        raise ValueError(msg)
+
+    mapping, mapping_mode = _build_binary_label_mapping(unique_values)
+    encoded = series.map(mapping)
+    if encoded.isna().any():
+        msg = f"Failed to encode target column '{column_name}' as a binary label."
+        raise ValueError(msg)
+
+    normalized = encoded.astype(int).reset_index(drop=True)
+    class_labels = [
+        {"raw": _stringify_label(raw_value), "encoded": int(encoded_value)}
+        for raw_value, encoded_value in sorted(mapping.items(), key=lambda item: item[1])
+    ]
+    return normalized, {
+        "column": column_name,
+        "class_labels": class_labels,
+        "mapping_mode": mapping_mode,
+        "positive_rate": float(normalized.mean()),
+    }
+
+
+def inspect_binary_target(series: pd.Series, column_name: str) -> dict[str, object]:
+    normalized, profile = normalize_binary_target(series, column_name)
+    profile["row_count"] = int(len(series))
+    profile["positive_count"] = int(normalized.sum())
+    profile["negative_count"] = int(len(normalized) - normalized.sum())
+    return profile
 
 
 def prepare_feature_frames(
@@ -169,6 +207,73 @@ def _prepare_categorical_frame(frame: pd.DataFrame, columns: list[str]) -> pd.Da
         return pd.DataFrame(index=frame.index)
     normalized = frame.loc[:, columns].fillna("__missing__").astype("string")
     return pd.get_dummies(normalized, drop_first=False, dtype=int)
+
+
+def _build_binary_label_mapping(unique_values: list[object]) -> tuple[dict[object, int], str]:
+    if all(isinstance(value, (bool, np.bool_)) for value in unique_values):
+        return {False: 0, True: 1}, "boolean"
+
+    numeric_values = pd.to_numeric(pd.Series(unique_values), errors="coerce")
+    if not numeric_values.isna().any():
+        ordered_pairs = sorted(
+            zip(unique_values, numeric_values.tolist(), strict=True),
+            key=lambda item: float(item[1]),
+        )
+        return {ordered_pairs[0][0]: 0, ordered_pairs[1][0]: 1}, "numeric"
+
+    positive_tokens = {
+        "1",
+        "true",
+        "yes",
+        "y",
+        "positive",
+        "pos",
+        "churn",
+        "churned",
+        "default",
+        "fraud",
+        "bad",
+        "failure",
+        "failed",
+        "win",
+        "converted",
+    }
+    negative_tokens = {
+        "0",
+        "false",
+        "no",
+        "n",
+        "negative",
+        "neg",
+        "retain",
+        "retained",
+        "good",
+        "pass",
+        "passed",
+        "loss",
+        "lost",
+    }
+    normalized_labels = {value: _normalize_label_token(value) for value in unique_values}
+    positive_candidates = [value for value, token in normalized_labels.items() if token in positive_tokens]
+    negative_candidates = [value for value, token in normalized_labels.items() if token in negative_tokens]
+    if len(positive_candidates) == 1 and len(negative_candidates) == 1:
+        return {
+            negative_candidates[0]: 0,
+            positive_candidates[0]: 1,
+        }, "semantic"
+
+    ordered_values = sorted(unique_values, key=lambda value: _normalize_label_token(value))
+    return {ordered_values[0]: 0, ordered_values[1]: 1}, "lexical"
+
+
+def _normalize_label_token(value: object) -> str:
+    return str(value).strip().casefold().replace("_", " ").replace("-", " ")
+
+
+def _stringify_label(value: object) -> str:
+    if pd.isna(value):
+        return "null"
+    return str(value)
 
 
 def build_synthetic_churn_demo(rows: int, random_state: int, variant: str = "implementation_like") -> pd.DataFrame:

@@ -13,6 +13,7 @@ mlflow.db
 runs/
 artifacts/
 data/
+custom_datasets/
 outputs/
 *.log
 *.egg-info/

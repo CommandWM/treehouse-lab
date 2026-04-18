@@ -66,7 +66,7 @@ select {
 
 .app-shell {
   display: grid;
-  grid-template-columns: 320px minmax(0, 1fr);
+  grid-template-columns: 340px minmax(0, 1fr);
   min-height: 100vh;
 }
 
@@ -75,12 +75,13 @@ select {
   border-right: 1px solid var(--line);
   background: color-mix(in srgb, var(--bg-elevated) 94%, transparent);
   backdrop-filter: blur(16px);
+  overflow-y: auto;
 }
 
 .sidebar-brand h1,
 .hero h2,
 .panel h3,
-.stage-tile h4 {
+.flow-card h4 {
   font-family: "Iowan Old Style", "Palatino Linotype", "Book Antiqua", Georgia, serif;
   letter-spacing: -0.03em;
 }
@@ -91,14 +92,14 @@ select {
 }
 
 .sidebar-brand p,
-.legend-list,
 .config-card__copy,
 .lead-copy,
 .signal-copy,
-.stage-tile p,
 .note-card p,
 .glossary-item p,
-.detail-list dd {
+.detail-list dd,
+.sidebar-note,
+.rule-card {
   color: var(--muted);
 }
 
@@ -113,20 +114,28 @@ select {
 }
 
 .sidebar-section {
-  margin-top: 1.8rem;
+  margin-top: 1.5rem;
 }
 
+.sidebar-nav,
 .config-list,
 .run-list,
-.panel-stack {
+.panel-stack,
+.rule-list,
+.mode-grid {
   display: grid;
   gap: 0.85rem;
 }
 
+.sidebar-nav--compact {
+  gap: 0.65rem;
+}
+
+.sidebar-tab,
 .config-card,
 .run-card,
-.tab,
-.action-button {
+.action-button,
+.section-toggle {
   border: 1px solid var(--line);
   background: var(--panel);
   color: inherit;
@@ -135,11 +144,44 @@ select {
   transition: transform 160ms ease, border-color 160ms ease, background 160ms ease;
 }
 
+.sidebar-tab:hover,
 .config-card:hover,
 .run-card:hover,
-.tab:hover,
-.action-button:hover {
+.action-button:hover,
+.section-toggle:hover {
   transform: translateY(-1px);
+  border-color: color-mix(in srgb, var(--accent) 38%, var(--line));
+}
+
+.sidebar-tab {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  text-align: left;
+  padding: 0.82rem 0.9rem;
+  font-weight: 700;
+}
+
+.sidebar-tab__step {
+  width: 1.45rem;
+  height: 1.45rem;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: color-mix(in srgb, var(--panel) 90%, transparent);
+  font-size: 0.8rem;
+  flex: 0 0 auto;
+}
+
+.sidebar-tab--secondary {
+  font-weight: 600;
+}
+
+.sidebar-tab--active,
+.config-card--active,
+.run-card--active {
+  background: color-mix(in srgb, var(--accent-soft) 58%, var(--panel-strong));
   border-color: color-mix(in srgb, var(--accent) 38%, var(--line));
 }
 
@@ -148,11 +190,8 @@ select {
   padding: 0.9rem;
 }
 
-.config-card--active,
-.run-card--active,
-.tab--active {
-  background: color-mix(in srgb, var(--accent-soft) 58%, var(--panel-strong));
-  border-color: color-mix(in srgb, var(--accent) 38%, var(--line));
+.config-list--templates {
+  margin-top: 0.85rem;
 }
 
 .config-card__title,
@@ -177,9 +216,20 @@ select {
   margin-bottom: 0.4rem;
 }
 
-.legend-list {
-  padding-left: 1.05rem;
-  margin: 0.75rem 0 0;
+.sidebar-note {
+  padding: 0.9rem 1rem;
+  border: 1px dashed var(--line);
+  border-radius: 18px;
+  background: color-mix(in srgb, var(--panel) 78%, transparent);
+  font-size: 0.9rem;
+}
+
+.section-toggle {
+  width: 100%;
+  padding: 0.85rem 0.95rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
 }
 
 .main-panel {
@@ -187,7 +237,8 @@ select {
 }
 
 .hero,
-.panel {
+.panel,
+.selection-card {
   border: 1px solid var(--line);
   background: var(--panel-strong);
   border-radius: 24px;
@@ -195,12 +246,14 @@ select {
 }
 
 .hero {
-  display: flex;
-  justify-content: space-between;
+  display: grid;
+  grid-template-columns: 1fr;
   gap: 1rem;
   padding: 1.35rem 1.45rem;
   margin-bottom: 1rem;
-  background: linear-gradient(145deg, color-mix(in srgb, var(--accent) 84%, transparent), color-mix(in srgb, var(--bg) 24%, transparent));
+  background:
+    radial-gradient(circle at top right, rgba(255, 255, 255, 0.1), transparent 24%),
+    linear-gradient(135deg, rgba(24, 34, 28, 0.92) 0%, color-mix(in srgb, var(--accent) 74%, var(--bg)) 72%, color-mix(in srgb, var(--bg) 34%, transparent) 100%);
   color: #f7faf7;
 }
 
@@ -222,10 +275,42 @@ select {
   margin: 0.35rem 0 0.7rem;
 }
 
-.hero-actions {
-  display: flex;
-  gap: 0.65rem;
-  align-items: flex-start;
+.selection-card {
+  margin-bottom: 1rem;
+  padding: 1rem;
+  background: color-mix(in srgb, var(--panel-strong) 92%, var(--accent-soft));
+  color: var(--text);
+  max-width: none;
+}
+
+.selection-card .lead-copy,
+.selection-card__path,
+.selection-card .step-control span {
+  color: var(--muted);
+}
+
+.selection-card__path {
+  margin-top: 0.75rem;
+  font-size: 0.88rem;
+  overflow-wrap: anywhere;
+}
+
+.selection-card__controls {
+  display: grid;
+  gap: 0.7rem;
+  margin-top: 1rem;
+}
+
+.selection-card--standalone .action-button {
+  background: color-mix(in srgb, var(--panel) 72%, transparent);
+}
+
+.selection-card--standalone .action-button--solid {
+  background: color-mix(in srgb, var(--accent-soft) 60%, var(--panel-strong));
+}
+
+.selection-card--standalone .action-button--secondary {
+  background: color-mix(in srgb, var(--panel) 48%, transparent);
 }
 
 .action-button {
@@ -244,6 +329,10 @@ select {
   background: rgba(255, 255, 255, 0.06);
 }
 
+.action-button--solid {
+  background: rgba(255, 255, 255, 0.2);
+}
+
 .pill,
 .chip,
 .code-pill {
@@ -252,17 +341,6 @@ select {
   padding: 0.28rem 0.65rem;
   font-size: 0.8rem;
   background: color-mix(in srgb, var(--panel) 88%, transparent);
-}
-
-.tabs {
-  display: flex;
-  gap: 0.55rem;
-  margin-bottom: 1rem;
-  flex-wrap: wrap;
-}
-
-.tab {
-  padding: 0.68rem 0.92rem;
 }
 
 .panel {
@@ -282,13 +360,13 @@ select {
   margin: 0.2rem 0 0.2rem;
 }
 
-.stage-grid {
+.flow-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 0.85rem;
 }
 
-.stage-tile,
+.flow-card,
 .signal-card,
 .note-card,
 .detail-box,
@@ -298,13 +376,30 @@ select {
   background: color-mix(in srgb, var(--panel) 92%, transparent);
 }
 
-.stage-tile {
+.flow-card {
+  position: relative;
   padding: 1rem;
 }
 
-.stage-tile h4 {
+.flow-card h4 {
   margin: 0.35rem 0 0.5rem;
-  font-size: 1.1rem;
+  font-size: 1.08rem;
+}
+
+.flow-arrow {
+  position: absolute;
+  right: -0.7rem;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 1.4rem;
+  height: 1.4rem;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--panel-strong);
+  color: var(--accent);
+  font-weight: 800;
 }
 
 .signal-grid {
@@ -344,6 +439,11 @@ select {
 .note-card strong {
   display: block;
   margin-bottom: 0.35rem;
+}
+
+.detail-copy {
+  margin: 0.8rem 0 0;
+  color: var(--muted);
 }
 
 .detail-list {
@@ -401,6 +501,96 @@ select {
   margin: 0.7rem 0 0;
 }
 
+.chip-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+}
+
+.step-control,
+.field {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.step-control span,
+.field span {
+  font-size: 0.74rem;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: rgba(247, 250, 247, 0.72);
+}
+
+.field span {
+  color: var(--gold);
+}
+
+.step-control select,
+.field input,
+.field textarea,
+.field select {
+  width: 100%;
+  border-radius: 14px;
+  border: 1px solid var(--line);
+  background: color-mix(in srgb, var(--panel) 92%, transparent);
+  color: var(--text);
+  padding: 0.8rem 0.9rem;
+}
+
+.field textarea {
+  resize: vertical;
+  min-height: 6.2rem;
+}
+
+.intake-layout {
+  display: grid;
+  grid-template-columns: 1.05fr 0.95fr;
+  gap: 1rem;
+}
+
+.intake-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.85rem;
+}
+
+.field--full {
+  grid-column: 1 / -1;
+}
+
+.form-actions {
+  display: flex;
+  gap: 0.65rem;
+  flex-wrap: wrap;
+  margin-top: 1rem;
+}
+
+.table-wrap {
+  overflow: auto;
+  margin-top: 0.8rem;
+}
+
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+
+.data-table th,
+.data-table td {
+  padding: 0.65rem 0.7rem;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+  vertical-align: top;
+}
+
+.data-table th {
+  color: var(--gold);
+  font-size: 0.74rem;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+}
+
 .loading-card,
 .error-banner {
   padding: 1rem 1.1rem;
@@ -415,7 +605,7 @@ select {
   margin-bottom: 1rem;
 }
 
-@media (max-width: 1200px) {
+@media (max-width: 1240px) {
   .app-shell {
     grid-template-columns: 1fr;
   }
@@ -425,9 +615,11 @@ select {
     border-bottom: 1px solid var(--line);
   }
 
+  .hero,
   .state-grid,
   .journal-layout,
-  .stage-grid,
+  .intake-layout,
+  .flow-grid,
   .signal-grid,
   .detail-list {
     grid-template-columns: 1fr 1fr;
@@ -440,19 +632,26 @@ select {
     padding: 1rem;
   }
 
-  .hero {
-    flex-direction: column;
+  .hero,
+  .intake-grid,
+  .flow-grid,
+  .signal-grid,
+  .state-grid,
+  .journal-layout,
+  .detail-list,
+  .intake-layout {
+    grid-template-columns: 1fr;
   }
 
   .hero h2 {
     font-size: 1.9rem;
   }
 
-  .stage-grid,
-  .signal-grid,
-  .state-grid,
-  .journal-layout,
-  .detail-list {
-    grid-template-columns: 1fr;
+  .flow-arrow {
+    display: none;
+  }
+
+  .form-actions {
+    flex-direction: column;
   }
 }

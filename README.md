@@ -6,7 +6,7 @@
 
 Treehouse Lab is a Karpathy-style autoresearch loop for tabular machine learning.
 
-Current checkpoint: `v0.8`. The research engine, benchmark pack, diagnosis layer, and React UI surface are in place, but dataset-intake assessment and broader user-facing onboarding still need to mature before a `v1` label would be justified.
+Current checkpoint: `v0.9`. The research engine, benchmark pack, diagnosis layer, and React UI surface now support dataset-first intake and a cleaner workbench flow, but broader evaluation hardening and onboarding still need to mature before a `v1` label would be justified.
 
 The idea is simple: give an agent a constrained playground around XGBoost-style models, let it propose experiments, run them safely, keep only the winners, and leave behind a readable research log instead of a pile of notebook debris.
 
