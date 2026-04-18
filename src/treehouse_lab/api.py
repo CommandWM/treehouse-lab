@@ -12,7 +12,7 @@ from pydantic import BaseModel, Field
 import yaml
 
 from treehouse_lab.config import load_experiment_config
-from treehouse_lab.datasets import inspect_binary_target
+from treehouse_lab.datasets import inspect_classification_target
 from treehouse_lab.exporting import export_model_artifact
 from treehouse_lab.journal import load_incumbent, load_journal_entries, load_run_entry
 from treehouse_lab.llm import (
@@ -27,13 +27,13 @@ from treehouse_lab.llm import (
 )
 from treehouse_lab.loop import AutonomousLoopController
 from treehouse_lab.runtime_settings import effective_llm_settings, llm_settings_path, save_llm_settings
-from treehouse_lab.runner import DEFAULT_MODEL_PARAMS, TreehouseLabRunner
+from treehouse_lab.runner import TreehouseLabRunner, default_model_params
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 DATASET_CONFIG_DIR = PROJECT_ROOT / "configs" / "datasets"
 GLOSSARY_PATH = PROJECT_ROOT / "docs" / "glossary.md"
 
-app = FastAPI(title="Treehouse Lab API", version="0.9.0")
+app = FastAPI(title="Treehouse Lab API", version="1.0.1")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -64,7 +64,7 @@ class DatasetCreateRequest(BaseModel):
     name: str = Field(min_length=1)
     description: str = ""
     config_key: str | None = None
-    primary_metric: str = Field(default="roc_auc", min_length=1)
+    primary_metric: str = Field(default="", min_length=0)
     objective: str = ""
     promote_if_delta_at_least: float = Field(default=0.003, gt=0)
     max_runtime_minutes: int = Field(default=10, ge=1, le=240)
@@ -191,16 +191,16 @@ def _inspect_frame(dataset_path: Path, frame: pd.DataFrame, target_column: str |
         raise HTTPException(status_code=400, detail=f"Unknown target column: {target_column}")
 
     try:
-        payload["target"] = inspect_binary_target(frame[target_column], target_column)
+        payload["target"] = inspect_classification_target(frame[target_column], target_column)
     except ValueError as exc:
         payload["target"] = {
             "column": target_column,
             "binary_supported": False,
+            "multiclass_supported": False,
             "error": str(exc),
             "distinct_labels": [str(value) for value in pd.unique(frame[target_column].dropna())[:10]],
         }
     else:
-        payload["target"]["binary_supported"] = True
         payload["feature_count"] = int(len(frame.columns) - 1)
     return payload
 
@@ -219,11 +219,17 @@ def _config_storage_path(dataset_path: Path) -> str:
         return str(dataset_path)
 
 
-def _build_dataset_config_payload(payload: DatasetCreateRequest, dataset_path: Path) -> dict[str, Any]:
+def _build_dataset_config_payload(
+    payload: DatasetCreateRequest,
+    dataset_path: Path,
+    target_profile: dict[str, Any],
+) -> dict[str, Any]:
     description = payload.description.strip() or f"User-provided CSV dataset from {dataset_path.name}."
     objective = payload.objective.strip() or (
         "Establish a clean incumbent for a user-provided dataset before bounded autoresearch begins."
     )
+    task_kind = str(target_profile["task_kind"])
+    primary_metric = payload.primary_metric.strip() or _default_primary_metric(task_kind)
     return {
         "dataset": {
             "source": {
@@ -238,6 +244,9 @@ def _build_dataset_config_payload(payload: DatasetCreateRequest, dataset_path: P
                 "stratify": payload.stratify,
             },
         },
+        "task": {
+            "kind": task_kind,
+        },
         "benchmark": {
             "pack": "user",
             "profile": "dataset_intake",
@@ -249,16 +258,20 @@ def _build_dataset_config_payload(payload: DatasetCreateRequest, dataset_path: P
         "experiment": {
             "name": f"{_slugify(payload.name)}-baseline",
             "description": description,
-            "primary_metric": payload.primary_metric,
+            "primary_metric": primary_metric,
             "promote_if_delta_at_least": payload.promote_if_delta_at_least,
             "max_runtime_minutes": payload.max_runtime_minutes,
             "seed": payload.seed,
             "baseline_hypothesis": "A disciplined XGBoost baseline should establish a credible incumbent before bounded mutations begin.",
         },
         "model": {
-            "params": dict(DEFAULT_MODEL_PARAMS),
+            "params": default_model_params(task_kind),
         },
     }
+def _default_primary_metric(task_kind: str) -> str:
+    if task_kind == "multiclass_classification":
+        return "accuracy"
+    return "roc_auc"
 
 
 def _serialize_config(config_key: str) -> dict[str, Any]:
@@ -270,6 +283,9 @@ def _serialize_config(config_key: str) -> dict[str, Any]:
         "name": config.name,
         "description": config.description,
         "primary_metric": config.primary_metric,
+        "task": {
+            "kind": config.task.kind,
+        },
         "source": {
             "kind": config.source.kind,
             "name": config.source.name,
@@ -468,8 +484,8 @@ def create_dataset_config(payload: DatasetCreateRequest) -> dict[str, Any]:
 
     dataset_path, frame = _read_csv_frame(payload.path)
     inspection = _inspect_frame(dataset_path, frame, target_column=payload.target_column)
-    if not inspection.get("target", {}).get("binary_supported", False):
-        detail = inspection["target"].get("error", "Target column is not valid for binary classification.")
+    if "target" not in inspection or inspection["target"].get("error"):
+        detail = inspection.get("target", {}).get("error", "Target column is not valid for classification.")
         raise HTTPException(status_code=400, detail=detail)
 
     config_key = _slugify(payload.config_key or payload.name)
@@ -477,7 +493,7 @@ def create_dataset_config(payload: DatasetCreateRequest) -> dict[str, Any]:
     if config_path.exists():
         raise HTTPException(status_code=409, detail=f"Config already exists: {config_key}.yaml")
 
-    config_blob = _build_dataset_config_payload(payload, dataset_path)
+    config_blob = _build_dataset_config_payload(payload, dataset_path, inspection["target"])
     config_path.write_text(
         yaml.safe_dump(config_blob, sort_keys=False, allow_unicode=False),
         encoding="utf-8",

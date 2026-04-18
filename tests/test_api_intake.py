@@ -103,6 +103,7 @@ def test_create_dataset_config_writes_explicit_yaml(client: TestClient, tmp_path
     assert response.status_code == 200
     payload = response.json()
     assert payload["key"] == "marketing-leads"
+    assert payload["config"]["task"]["kind"] == "binary_classification"
     assert payload["config"]["source"]["kind"] == "csv"
     assert payload["config"]["source"]["target_column"] == "converted"
     assert payload["config"]["source"]["path"] == "marketing_leads.csv"
@@ -112,18 +113,19 @@ def test_create_dataset_config_writes_explicit_yaml(client: TestClient, tmp_path
     assert config_path.exists()
     config_text = config_path.read_text(encoding="utf-8")
     assert "kind: csv" in config_text
+    assert "kind: binary_classification" in config_text
     assert "target_column: converted" in config_text
     assert "path: marketing_leads.csv" in config_text
 
 
-def test_create_dataset_config_rejects_non_binary_target(client: TestClient, tmp_path: Path) -> None:
+def test_create_dataset_config_supports_multiclass_target(client: TestClient, tmp_path: Path) -> None:
     dataset_path = tmp_path / "outcomes.csv"
     write_csv(
         dataset_path,
         pd.DataFrame(
             {
-                "score": [1, 2, 3],
-                "outcome": ["win", "loss", "draw"],
+                "score": [1, 2, 3, 4],
+                "outcome": ["win", "loss", "draw", "draw"],
             }
         ),
     )
@@ -137,5 +139,8 @@ def test_create_dataset_config_rejects_non_binary_target(client: TestClient, tmp
         },
     )
 
-    assert response.status_code == 400
-    assert "must contain exactly 2 distinct labels" in response.text
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["config"]["task"]["kind"] == "multiclass_classification"
+    assert payload["config"]["primary_metric"] == "accuracy"
+    assert payload["inspection"]["target"]["multiclass_supported"] is True

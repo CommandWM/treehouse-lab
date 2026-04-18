@@ -16,6 +16,7 @@ class DatasetBundle:
     frame: pd.DataFrame
     target: pd.Series
     target_name: str
+    target_profile: dict[str, object]
 
 
 @dataclass(slots=True)
@@ -29,15 +30,21 @@ class DatasetSplit:
     preprocessor: FeaturePreprocessor
 
     def summary(self) -> dict[str, float | int]:
-        return {
+        summary: dict[str, float | int | dict[str, float]] = {
             "train_rows": int(len(self.X_train)),
             "validation_rows": int(len(self.X_val)),
             "test_rows": int(len(self.X_test)),
             "feature_count": int(self.X_train.shape[1]),
-            "train_positive_rate": float(self.y_train.mean()),
-            "validation_positive_rate": float(self.y_val.mean()),
-            "test_positive_rate": float(self.y_test.mean()),
+            "class_count": int(pd.concat([self.y_train, self.y_val, self.y_test], ignore_index=True).nunique()),
+            "train_class_distribution": _class_distribution(self.y_train),
+            "validation_class_distribution": _class_distribution(self.y_val),
+            "test_class_distribution": _class_distribution(self.y_test),
         }
+        if summary["class_count"] == 2:
+            summary["train_positive_rate"] = float(self.y_train.mean())
+            summary["validation_positive_rate"] = float(self.y_val.mean())
+            summary["test_positive_rate"] = float(self.y_test.mean())
+        return summary
 
 
 @dataclass(slots=True)
@@ -59,10 +66,18 @@ def load_dataset(config: ExperimentConfig, project_root: Path) -> DatasetBundle:
         frame = data.frame.copy()
         target_name = data.target_names[1]
         target = frame.pop("target").astype(int)
+        target_profile = build_target_profile(
+            target,
+            target_name="target",
+            class_labels=[{"raw": name, "encoded": index} for index, name in enumerate(data.target_names)],
+            mapping_mode="dataset",
+            task_kind="binary_classification",
+        )
         return DatasetBundle(
             frame=frame.copy(),
             target=target,
             target_name=target_name,
+            target_profile=target_profile,
         )
 
     if source.kind == "synthetic_churn_demo":
@@ -73,10 +88,21 @@ def load_dataset(config: ExperimentConfig, project_root: Path) -> DatasetBundle:
         )
         target_name = source.target_column or "churned"
         target = frame.pop(target_name).astype(int)
+        target_profile = build_target_profile(
+            target,
+            target_name=target_name,
+            class_labels=[
+                {"raw": "not_churned", "encoded": 0},
+                {"raw": "churned", "encoded": 1},
+            ],
+            mapping_mode="dataset",
+            task_kind="binary_classification",
+        )
         return DatasetBundle(
             frame=frame.copy(),
             target=target,
             target_name=target_name,
+            target_profile=target_profile,
         )
 
     if source.kind == "csv":
@@ -86,11 +112,12 @@ def load_dataset(config: ExperimentConfig, project_root: Path) -> DatasetBundle:
         csv_path = (project_root / source.path).resolve()
         frame = pd.read_csv(csv_path)
         raw_target = frame.pop(source.target_column)
-        target, _ = normalize_binary_target(raw_target, source.target_column)
+        target, target_profile = normalize_classification_target(raw_target, source.target_column, config.task.kind)
         return DatasetBundle(
             frame=frame.copy(),
             target=target,
             target_name=source.target_column,
+            target_profile=target_profile,
         )
 
     msg = f"Unsupported dataset source kind: {source.kind}"
@@ -138,40 +165,71 @@ def split_dataset(bundle: DatasetBundle, config: ExperimentConfig) -> DatasetSpl
     )
 
 
-def normalize_binary_target(series: pd.Series, column_name: str) -> tuple[pd.Series, dict[str, object]]:
+def normalize_classification_target(
+    series: pd.Series,
+    column_name: str,
+    task_kind: str = "auto",
+) -> tuple[pd.Series, dict[str, object]]:
     if series.isna().any():
         msg = f"Target column '{column_name}' contains missing values."
         raise ValueError(msg)
 
     unique_values = list(pd.unique(series))
-    if len(unique_values) != 2:
-        msg = f"Target column '{column_name}' must contain exactly 2 distinct labels for binary classification."
+    if len(unique_values) < 2:
+        msg = f"Target column '{column_name}' must contain at least 2 distinct labels for classification."
         raise ValueError(msg)
 
-    mapping, mapping_mode = _build_binary_label_mapping(unique_values)
+    resolved_task_kind = _resolve_task_kind(task_kind, unique_values, column_name)
+    if resolved_task_kind == "binary_classification":
+        mapping, mapping_mode = _build_binary_label_mapping(unique_values)
+    else:
+        mapping, mapping_mode = _build_multiclass_label_mapping(unique_values)
+
     encoded = series.map(mapping)
     if encoded.isna().any():
-        msg = f"Failed to encode target column '{column_name}' as a binary label."
+        msg = f"Failed to encode target column '{column_name}' as classification labels."
         raise ValueError(msg)
 
     normalized = encoded.astype(int).reset_index(drop=True)
-    class_labels = [
-        {"raw": _stringify_label(raw_value), "encoded": int(encoded_value)}
-        for raw_value, encoded_value in sorted(mapping.items(), key=lambda item: item[1])
-    ]
-    return normalized, {
-        "column": column_name,
-        "class_labels": class_labels,
-        "mapping_mode": mapping_mode,
-        "positive_rate": float(normalized.mean()),
-    }
+    return normalized, build_target_profile(
+        normalized,
+        target_name=column_name,
+        class_labels=[
+            {"raw": _stringify_label(raw_value), "encoded": int(encoded_value)}
+            for raw_value, encoded_value in sorted(mapping.items(), key=lambda item: item[1])
+        ],
+        mapping_mode=mapping_mode,
+        task_kind=resolved_task_kind,
+    )
 
 
 def inspect_binary_target(series: pd.Series, column_name: str) -> dict[str, object]:
-    normalized, profile = normalize_binary_target(series, column_name)
+    normalized, profile = normalize_classification_target(series, column_name, task_kind="binary_classification")
     profile["row_count"] = int(len(series))
     profile["positive_count"] = int(normalized.sum())
     profile["negative_count"] = int(len(normalized) - normalized.sum())
+    return profile
+
+
+def normalize_binary_target(series: pd.Series, column_name: str) -> tuple[pd.Series, dict[str, object]]:
+    return normalize_classification_target(series, column_name, task_kind="binary_classification")
+
+
+def inspect_classification_target(series: pd.Series, column_name: str) -> dict[str, object]:
+    normalized, profile = normalize_classification_target(series, column_name, task_kind="auto")
+    profile["row_count"] = int(len(series))
+    if profile["class_count"] == 2:
+        profile["positive_count"] = int(normalized.sum())
+        profile["negative_count"] = int(len(normalized) - normalized.sum())
+        profile["binary_supported"] = True
+        profile["multiclass_supported"] = False
+    else:
+        profile["binary_supported"] = False
+        profile["multiclass_supported"] = True
+        profile["class_counts"] = {
+            str(label): int(count)
+            for label, count in normalized.value_counts(sort=False).sort_index().items()
+        }
     return profile
 
 
@@ -246,6 +304,48 @@ def _prepare_categorical_frame(frame: pd.DataFrame, columns: list[str]) -> pd.Da
     return pd.get_dummies(normalized, drop_first=False, dtype=int)
 
 
+def build_target_profile(
+    target: pd.Series,
+    target_name: str,
+    class_labels: list[dict[str, object]],
+    mapping_mode: str,
+    task_kind: str,
+) -> dict[str, object]:
+    profile: dict[str, object] = {
+        "column": target_name,
+        "task_kind": task_kind,
+        "class_count": int(target.nunique()),
+        "class_labels": class_labels,
+        "mapping_mode": mapping_mode,
+    }
+    if task_kind == "binary_classification":
+        profile["positive_rate"] = float(target.mean())
+    return profile
+
+
+def _class_distribution(series: pd.Series) -> dict[str, float]:
+    counts = series.value_counts(normalize=True, sort=False).sort_index()
+    return {str(label): float(rate) for label, rate in counts.items()}
+
+
+def _resolve_task_kind(task_kind: str, unique_values: list[object], column_name: str) -> str:
+    normalized_task_kind = task_kind.strip().casefold()
+    if normalized_task_kind == "auto":
+        return "binary_classification" if len(unique_values) == 2 else "multiclass_classification"
+    if normalized_task_kind == "binary_classification":
+        if len(unique_values) != 2:
+            msg = f"Target column '{column_name}' must contain exactly 2 distinct labels for binary classification."
+            raise ValueError(msg)
+        return normalized_task_kind
+    if normalized_task_kind == "multiclass_classification":
+        if len(unique_values) < 3:
+            msg = f"Target column '{column_name}' must contain at least 3 distinct labels for multiclass classification."
+            raise ValueError(msg)
+        return normalized_task_kind
+    msg = f"Unsupported task kind: {task_kind}"
+    raise ValueError(msg)
+
+
 def _build_binary_label_mapping(unique_values: list[object]) -> tuple[dict[object, int], str]:
     if all(isinstance(value, (bool, np.bool_)) for value in unique_values):
         return {False: 0, True: 1}, "boolean"
@@ -301,6 +401,19 @@ def _build_binary_label_mapping(unique_values: list[object]) -> tuple[dict[objec
 
     ordered_values = sorted(unique_values, key=lambda value: _normalize_label_token(value))
     return {ordered_values[0]: 0, ordered_values[1]: 1}, "lexical"
+
+
+def _build_multiclass_label_mapping(unique_values: list[object]) -> tuple[dict[object, int], str]:
+    numeric_values = pd.to_numeric(pd.Series(unique_values), errors="coerce")
+    if not numeric_values.isna().any():
+        ordered_pairs = sorted(
+            zip(unique_values, numeric_values.tolist(), strict=True),
+            key=lambda item: float(item[1]),
+        )
+        return {raw_value: index for index, (raw_value, _) in enumerate(ordered_pairs)}, "numeric"
+
+    ordered_values = sorted(unique_values, key=lambda value: _normalize_label_token(value))
+    return {raw_value: index for index, raw_value in enumerate(ordered_values)}, "lexical"
 
 
 def _normalize_label_token(value: object) -> str:

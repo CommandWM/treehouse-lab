@@ -108,25 +108,28 @@ def _build_checks(
             )
         )
 
-    train_gap = float(metrics["train_roc_auc"]) - float(metrics["validation_roc_auc"])
+    train_metric = _split_metric(metrics, config.primary_metric, "train")
+    validation_metric = _split_metric(metrics, config.primary_metric, "validation")
+    test_metric = _split_metric(metrics, config.primary_metric, "test")
+    train_gap = train_metric - validation_metric
     checks.append(
         EvaluationCheck(
             name="train_validation_gap",
             passed=train_gap <= policy.max_train_validation_gap,
             detail=(
-                f"Train-validation ROC AUC gap is {train_gap:.4f}; "
+                f"Train-validation {config.primary_metric} gap is {train_gap:.4f}; "
                 f"allowed maximum is {policy.max_train_validation_gap:.4f}."
             ),
         )
     )
 
-    validation_test_gap = abs(float(metrics["validation_roc_auc"]) - float(metrics["test_roc_auc"]))
+    validation_test_gap = abs(validation_metric - test_metric)
     checks.append(
         EvaluationCheck(
             name="validation_test_gap",
             passed=validation_test_gap <= policy.max_validation_test_gap,
             detail=(
-                f"Validation-test ROC AUC gap is {validation_test_gap:.4f}; "
+                f"Validation-test {config.primary_metric} gap is {validation_test_gap:.4f}; "
                 f"allowed maximum is {policy.max_validation_test_gap:.4f}."
             ),
         )
@@ -154,3 +157,12 @@ def _build_checks(
         )
 
     return checks
+
+
+def _split_metric(metrics: dict[str, float], primary_metric: str, split: str) -> float:
+    split_key = f"{split}_{primary_metric}"
+    if split_key in metrics:
+        return float(metrics[split_key])
+    if split == "validation":
+        return float(metrics.get(primary_metric, 0.0))
+    return float(metrics.get(split_key.replace(primary_metric, "roc_auc"), metrics.get(primary_metric, 0.0)))

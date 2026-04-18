@@ -32,6 +32,7 @@ class ExperimentProposal:
 @dataclass(slots=True)
 class ProposalDecisionContext:
     dataset_key: str
+    task_kind: str
     primary_metric: str
     promote_threshold: float
     incumbent_run_id: str | None

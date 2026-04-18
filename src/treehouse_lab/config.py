@@ -26,6 +26,11 @@ class SplitConfig:
 
 
 @dataclass(slots=True)
+class TaskConfig:
+    kind: str = "binary_classification"
+
+
+@dataclass(slots=True)
 class ModelConfig:
     params: dict[str, Any] = field(default_factory=dict)
 
@@ -58,6 +63,7 @@ class ExperimentConfig:
     hypothesis: str
     source: DatasetSourceConfig
     split: SplitConfig
+    task: TaskConfig
     model: ModelConfig
     benchmark: BenchmarkConfig
     evaluation_policy: EvaluationPolicyConfig
@@ -79,6 +85,7 @@ def load_experiment_config(path: str | Path) -> ExperimentConfig:
 
     source_raw = raw.get("dataset", {}).get("source", {})
     split_raw = raw.get("dataset", {}).get("split", {})
+    task_raw = raw.get("task", {})
     experiment_raw = raw.get("experiment", {})
     model_raw = raw.get("model", {})
     benchmark_raw = raw.get("benchmark", {})
@@ -109,6 +116,9 @@ def load_experiment_config(path: str | Path) -> ExperimentConfig:
             validation_size=float(split_raw.get("validation_size", 0.2)),
             test_size=float(split_raw.get("test_size", 0.2)),
             stratify=bool(split_raw.get("stratify", True)),
+        ),
+        task=TaskConfig(
+            kind=str(task_raw.get("kind", "binary_classification")),
         ),
         model=ModelConfig(params=dict(model_raw.get("params", {}))),
         benchmark=BenchmarkConfig(

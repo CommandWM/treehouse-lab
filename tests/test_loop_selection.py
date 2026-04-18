@@ -12,6 +12,7 @@ from treehouse_lab.proposals import ExperimentProposal, ProposalDecisionContext
 def make_context() -> ProposalDecisionContext:
     return ProposalDecisionContext(
         dataset_key="bank-valid-test",
+        task_kind="binary_classification",
         primary_metric="roc_auc",
         promote_threshold=0.003,
         incumbent_run_id="baseline-run",

@@ -58,6 +58,8 @@ def list_templates(stage: str = "parameter_tuning") -> list[MutationTemplate]:
 def generate_candidates(context: ProposalDecisionContext) -> list[MutationCandidate]:
     candidates: list[MutationCandidate] = []
     for template in list_templates():
+        if template.name == "imbalance_adjustment" and context.task_kind != "binary_classification":
+            continue
         proposal = _proposal_for_template(template, context)
         if proposal is not None:
             candidates.append(MutationCandidate(template=template, proposal=proposal))

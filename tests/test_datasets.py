@@ -3,7 +3,12 @@ from __future__ import annotations
 import pandas as pd
 import pytest
 
-from treehouse_lab.datasets import inspect_binary_target, normalize_binary_target
+from treehouse_lab.datasets import (
+    inspect_binary_target,
+    inspect_classification_target,
+    normalize_binary_target,
+    normalize_classification_target,
+)
 
 
 def test_normalize_binary_target_supports_semantic_labels() -> None:
@@ -48,3 +53,29 @@ def test_inspect_binary_target_reports_counts() -> None:
     assert profile["positive_count"] == 3
     assert profile["negative_count"] == 1
     assert profile["row_count"] == 4
+
+
+def test_normalize_classification_target_supports_multiclass_labels() -> None:
+    series = pd.Series(["low", "medium", "high", "medium"], name="burnout_level")
+
+    encoded, profile = normalize_classification_target(series, "burnout_level")
+
+    assert encoded.tolist() == [1, 2, 0, 2]
+    assert profile["task_kind"] == "multiclass_classification"
+    assert profile["class_count"] == 3
+    assert profile["class_labels"] == [
+        {"raw": "high", "encoded": 0},
+        {"raw": "low", "encoded": 1},
+        {"raw": "medium", "encoded": 2},
+    ]
+
+
+def test_inspect_classification_target_reports_multiclass_shape() -> None:
+    series = pd.Series(["low", "medium", "high", "medium"], name="burnout_level")
+
+    profile = inspect_classification_target(series, "burnout_level")
+
+    assert profile["binary_supported"] is False
+    assert profile["multiclass_supported"] is True
+    assert profile["class_count"] == 3
+    assert profile["class_counts"] == {"0": 1, "1": 1, "2": 2}

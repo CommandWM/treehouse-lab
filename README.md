@@ -4,9 +4,14 @@
   <img src="docs/assets/treehouse-lab.png" alt="Treehouse Lab logo" width="420" />
 </p>
 
+<p align="center">
+  <a href="https://github.com/CommandWM/treehouse-lab/actions/workflows/ci.yml"><img src="https://github.com/CommandWM/treehouse-lab/actions/workflows/ci.yml/badge.svg" alt="CI status" /></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green.svg" alt="MIT License" /></a>
+</p>
+
 Treehouse Lab is a Karpathy-style autoresearch loop for tabular machine learning.
 
-Current checkpoint: `v1.0.0`. The repo now has a real end-to-end local workflow: dataset-first intake, bounded autoresearch loops, grounded LLM assistance, coach-triggered bounded execution, local settings for provider credentials, and exportable model artifacts with optional container packaging.
+Current checkpoint: `v1.0.1`. The repo now has a real end-to-end local workflow: dataset-first intake, bounded autoresearch loops, grounded LLM assistance, coach-triggered bounded execution, local settings for provider credentials, exportable model artifacts with optional container packaging, and explicit binary or multiclass classification support for XGBoost-first experiments.
 
 The idea is simple: give an agent a constrained playground around XGBoost-style models, let it propose experiments, run them safely, keep only the winners, and leave behind a readable research log instead of a pile of notebook debris.
 
@@ -50,7 +55,7 @@ What it still does not try to be:
 
 Version 1 is intentionally narrow:
 
-- binary classification
+- binary and multiclass classification
 - single-table tabular datasets
 - XGBoost as the primary learner
 - Optuna for hyperparameter search

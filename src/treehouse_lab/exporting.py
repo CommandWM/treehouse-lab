@@ -24,9 +24,11 @@ class ExportedModelBundle:
     registry_key: str
     config_path: str
     target_name: str
+    task_kind: str
+    class_labels: list[str]
     primary_metric: str
     backend: str
-    threshold: float
+    threshold: float | None
     feature_preprocessor: FeaturePreprocessor
     model_params: dict[str, Any]
     metrics: dict[str, float]
@@ -39,12 +41,33 @@ class ExportedModelBundle:
 
     def predict_frame(self, frame: pd.DataFrame) -> pd.DataFrame:
         prepared = transform_feature_frame(frame, self.feature_preprocessor)
-        scores = self.model.predict_proba(prepared)[:, 1]
-        predictions = (scores >= self.threshold).astype(int)
+        probabilities = self.model.predict_proba(prepared)
+        predictions = self.model.predict(prepared)
+
+        if self.task_kind == "multiclass_classification":
+            result = pd.DataFrame(
+                {
+                    "score": probabilities.max(axis=1).astype(float),
+                    "prediction": pd.Series(predictions).astype(int),
+                }
+            )
+            if self.class_labels:
+                result["predicted_label"] = pd.Series(
+                    [
+                        self.class_labels[int(index)] if int(index) < len(self.class_labels) else str(index)
+                        for index in result["prediction"].tolist()
+                    ],
+                    dtype="string",
+                )
+            return result
+
+        scores = probabilities[:, 1]
+        threshold = 0.5 if self.threshold is None else float(self.threshold)
+        binary_predictions = (scores >= threshold).astype(int)
         return pd.DataFrame(
             {
                 "score": scores.astype(float),
-                "prediction": predictions.astype(int),
+                "prediction": binary_predictions.astype(int),
             }
         )
 
@@ -194,9 +217,11 @@ def _rebuild_legacy_bundle(project_root: Path, run_entry: dict[str, Any], bundle
         registry_key=config_path.stem,
         config_path=str(config_path),
         target_name=bundle.target_name,
+        task_kind=str(bundle.target_profile["task_kind"]),
+        class_labels=[str(label["raw"]) for label in bundle.target_profile.get("class_labels", [])],
         primary_metric=config.primary_metric,
         backend=str(run_entry.get("backend") or backend),
-        threshold=0.5,
+        threshold=0.5 if str(bundle.target_profile["task_kind"]) == "binary_classification" else None,
         feature_preprocessor=split.preprocessor,
         model_params=params,
         metrics=dict(run_entry.get("metrics", {})),
@@ -239,6 +264,8 @@ def _fastapi_app_template() -> str:
                 "run_id": bundle.run_id,
                 "input_columns": bundle.feature_preprocessor.input_columns,
                 "target_name": bundle.target_name,
+                "task_kind": bundle.task_kind,
+                "class_labels": bundle.class_labels,
                 "threshold": bundle.threshold,
             }
 

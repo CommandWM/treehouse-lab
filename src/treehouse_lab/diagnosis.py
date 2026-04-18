@@ -42,12 +42,12 @@ def diagnose_run_state(
 
     metric_key = config.primary_metric
     metric_value = float(metrics.get(metric_key, metrics.get(f"validation_{metric_key}", 0.0)))
-    train_roc_auc = float(metrics.get("train_roc_auc", metric_value))
-    validation_roc_auc = float(metrics.get("validation_roc_auc", metric_value))
-    test_roc_auc = float(metrics.get("test_roc_auc", metric_value))
-    overfit_gap = train_roc_auc - validation_roc_auc
-    validation_test_gap = abs(validation_roc_auc - test_roc_auc)
-    positive_rate = float(split_summary.get("validation_positive_rate", split_summary.get("train_positive_rate", 0.5)))
+    train_metric = float(metrics.get(f"train_{metric_key}", metric_value))
+    validation_metric = float(metrics.get(f"validation_{metric_key}", metric_value))
+    test_metric = float(metrics.get(f"test_{metric_key}", metric_value))
+    overfit_gap = train_metric - validation_metric
+    validation_test_gap = abs(validation_metric - test_metric)
+    positive_rate = _positive_rate(split_summary)
 
     tags: list[str] = []
     reason_codes: list[str] = []
@@ -65,11 +65,11 @@ def diagnose_run_state(
         tags.append("generalization_risk")
         reason_codes.append("diagnosis_generalization_risk")
 
-    if abs(0.5 - positive_rate) > 0.15:
+    if positive_rate is not None and abs(0.5 - positive_rate) > 0.15:
         tags.append("class_imbalance")
         reason_codes.append("diagnosis_class_imbalance")
 
-    if "overfit" not in tags and "quality_floor_miss" in tags and train_roc_auc < metric_value + 0.06:
+    if "overfit" not in tags and "quality_floor_miss" in tags and train_metric < metric_value + 0.06:
         tags.append("underfit")
         reason_codes.append("diagnosis_underfit")
 
@@ -96,12 +96,12 @@ def diagnose_run_state(
         reason_codes=reason_codes,
         evidence={
             "metric_value": round(metric_value, 4),
-            "train_roc_auc": round(train_roc_auc, 4),
-            "validation_roc_auc": round(validation_roc_auc, 4),
-            "test_roc_auc": round(test_roc_auc, 4),
+            f"train_{metric_key}": round(train_metric, 4),
+            f"validation_{metric_key}": round(validation_metric, 4),
+            f"test_{metric_key}": round(test_metric, 4),
             "overfit_gap": round(overfit_gap, 4),
             "validation_test_gap": round(validation_test_gap, 4),
-            "positive_rate": round(positive_rate, 4),
+            "positive_rate": None if positive_rate is None else round(positive_rate, 4),
             "minimum_primary_metric": None if minimum_primary_metric is None else round(float(minimum_primary_metric), 4),
         },
     )
@@ -181,7 +181,7 @@ def _build_summary(
     metric_value: float,
     overfit_gap: float,
     validation_test_gap: float,
-    positive_rate: float,
+    positive_rate: float | None,
 ) -> str:
     clauses = [f"Validation {metric_key} is {metric_value:.4f}."]
     if "overfit" in tags:
@@ -213,3 +213,11 @@ def _recommended_direction(primary_tag: str, tags: list[str]) -> str:
     if primary_tag == "generalization_risk":
         return "Prioritize stability and avoid mutations that widen validation-holdout drift."
     return "Keep the next mutation small, attributable, and inside the declared search space."
+
+
+def _positive_rate(split_summary: dict[str, Any]) -> float | None:
+    if "validation_positive_rate" in split_summary:
+        return float(split_summary["validation_positive_rate"])
+    if "train_positive_rate" in split_summary:
+        return float(split_summary["train_positive_rate"])
+    return None

@@ -8,9 +8,10 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+import numpy as np
 import pandas as pd
 from sklearn.ensemble import GradientBoostingClassifier
-from sklearn.metrics import accuracy_score, log_loss, roc_auc_score
+from sklearn.metrics import accuracy_score, f1_score, log_loss, roc_auc_score
 
 from treehouse_lab.config import load_experiment_config
 from treehouse_lab.datasets import DatasetSplit, load_dataset, split_dataset
@@ -55,6 +56,18 @@ DEFAULT_MODEL_PARAMS: dict[str, Any] = {
     "tree_method": "hist",
     "n_jobs": 4,
 }
+
+
+def default_model_params(task_kind: str = "binary_classification", class_count: int | None = None) -> dict[str, Any]:
+    params = dict(DEFAULT_MODEL_PARAMS)
+    if task_kind == "multiclass_classification":
+        params["objective"] = "multi:softprob"
+        params["eval_metric"] = "mlogloss"
+        if class_count is not None:
+            params["num_class"] = int(class_count)
+    else:
+        params.pop("num_class", None)
+    return params
 
 
 @dataclass(slots=True)
@@ -128,11 +141,16 @@ class TreehouseLabRunner:
         run_started = time.perf_counter()
         dataset = load_dataset(self.config, self.project_root)
         split = split_dataset(dataset, self.config)
-        params = self._resolve_model_params(overrides, base_params=base_params)
+        params = self._resolve_model_params(
+            overrides,
+            base_params=base_params,
+            task_kind=str(dataset.target_profile["task_kind"]),
+            class_count=int(dataset.target_profile["class_count"]),
+        )
         model, backend = self._build_model(params)
         model.fit(split.X_train, split.y_train)
 
-        metrics = self._compute_metrics(model, split)
+        metrics = self._compute_metrics(model, split, task_kind=str(dataset.target_profile["task_kind"]))
         runtime_seconds = time.perf_counter() - run_started
         promoted, comparison, decision_reason = self._promotion_decision(metrics[self.config.primary_metric])
         split_summary = split.summary()
@@ -161,6 +179,7 @@ class TreehouseLabRunner:
             split_summary=split_summary,
             feature_names=list(split.X_train.columns),
             target_name=dataset.target_name,
+            target_profile=dataset.target_profile,
             primary_metric=self.config.primary_metric,
             preprocessor=split.preprocessor,
             model=model,
@@ -209,14 +228,31 @@ class TreehouseLabRunner:
         self._record_journal(result)
         return result
 
-    def _resolve_model_params(self, overrides: dict[str, Any], base_params: dict[str, Any] | None = None) -> dict[str, Any]:
-        params = dict(DEFAULT_MODEL_PARAMS)
+    def _resolve_model_params(
+        self,
+        overrides: dict[str, Any],
+        base_params: dict[str, Any] | None = None,
+        task_kind: str | None = None,
+        class_count: int | None = None,
+    ) -> dict[str, Any]:
+        resolved_task_kind = task_kind or self.config.task.kind
+        params = default_model_params(resolved_task_kind, class_count=class_count)
         if base_params:
             params.update(base_params)
         else:
             params.update(self.config.model.params)
         params["random_state"] = self.config.seed
         params.update(overrides)
+        if resolved_task_kind == "multiclass_classification":
+            params["objective"] = "multi:softprob"
+            params["eval_metric"] = "mlogloss"
+            if class_count is not None:
+                params["num_class"] = int(class_count)
+            params.pop("scale_pos_weight", None)
+        else:
+            params["objective"] = str(params.get("objective", "binary:logistic"))
+            params["eval_metric"] = str(params.get("eval_metric", "logloss"))
+            params.pop("num_class", None)
         return params
 
     def _build_model(self, params: dict[str, Any]) -> tuple[Any, str]:
@@ -233,7 +269,10 @@ class TreehouseLabRunner:
         }
         return GradientBoostingClassifier(**fallback_params), "sklearn_gradient_boosting"
 
-    def _compute_metrics(self, model: Any, split: DatasetSplit) -> dict[str, float]:
+    def _compute_metrics(self, model: Any, split: DatasetSplit, task_kind: str) -> dict[str, float]:
+        if task_kind == "multiclass_classification":
+            return self._compute_multiclass_metrics(model, split)
+
         train_pred = model.predict_proba(split.X_train)[:, 1]
         val_pred = model.predict_proba(split.X_val)[:, 1]
         test_pred = model.predict_proba(split.X_test)[:, 1]
@@ -253,6 +292,30 @@ class TreehouseLabRunner:
             "train_log_loss": float(log_loss(split.y_train, train_pred)),
             "validation_log_loss": float(log_loss(split.y_val, val_pred)),
             "test_log_loss": float(log_loss(split.y_test, test_pred)),
+        }
+
+    def _compute_multiclass_metrics(self, model: Any, split: DatasetSplit) -> dict[str, float]:
+        train_pred = model.predict_proba(split.X_train)
+        val_pred = model.predict_proba(split.X_val)
+        test_pred = model.predict_proba(split.X_test)
+
+        train_label_pred = np.asarray(model.predict(split.X_train), dtype=int)
+        val_label_pred = np.asarray(model.predict(split.X_val), dtype=int)
+        test_label_pred = np.asarray(model.predict(split.X_test), dtype=int)
+        labels = sorted(pd.concat([split.y_train, split.y_val, split.y_test], ignore_index=True).unique().tolist())
+
+        return {
+            "accuracy": float(accuracy_score(split.y_val, val_label_pred)),
+            "train_accuracy": float(accuracy_score(split.y_train, train_label_pred)),
+            "validation_accuracy": float(accuracy_score(split.y_val, val_label_pred)),
+            "test_accuracy": float(accuracy_score(split.y_test, test_label_pred)),
+            "macro_f1": float(f1_score(split.y_val, val_label_pred, average="macro")),
+            "train_macro_f1": float(f1_score(split.y_train, train_label_pred, average="macro")),
+            "validation_macro_f1": float(f1_score(split.y_val, val_label_pred, average="macro")),
+            "test_macro_f1": float(f1_score(split.y_test, test_label_pred, average="macro")),
+            "train_log_loss": float(log_loss(split.y_train, train_pred, labels=labels)),
+            "validation_log_loss": float(log_loss(split.y_val, val_pred, labels=labels)),
+            "test_log_loss": float(log_loss(split.y_test, test_pred, labels=labels)),
         }
 
     def _promotion_decision(self, metric_value: float) -> tuple[bool, dict[str, Any], str]:
@@ -284,6 +347,7 @@ class TreehouseLabRunner:
         split_summary: dict[str, float | int],
         feature_names: list[str],
         target_name: str,
+        target_profile: dict[str, Any],
         primary_metric: str,
         preprocessor: Any,
         model: Any,
@@ -331,9 +395,11 @@ class TreehouseLabRunner:
                 registry_key=self.registry_key,
                 config_path=str(self.config_path),
                 target_name=target_name,
+                task_kind=str(target_profile["task_kind"]),
+                class_labels=[str(label["raw"]) for label in target_profile.get("class_labels", [])],
                 primary_metric=primary_metric,
                 backend=backend,
-                threshold=0.5,
+                threshold=0.5 if str(target_profile["task_kind"]) == "binary_classification" else None,
                 feature_preprocessor=preprocessor,
                 model_params=params,
                 metrics=metrics,

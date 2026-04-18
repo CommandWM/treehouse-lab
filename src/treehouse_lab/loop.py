@@ -380,7 +380,14 @@ class AutonomousLoopController:
         if not incumbent_params:
             incumbent_params = self.runner._resolve_model_params({})
 
-        overfit_gap = float(incumbent_metrics.get("train_roc_auc", 0.0)) - float(incumbent_metrics.get("validation_roc_auc", 0.0))
+        overfit_gap = float(
+            incumbent_metrics.get(f"train_{self.config.primary_metric}", incumbent_metrics.get(self.config.primary_metric, 0.0))
+        ) - float(
+            incumbent_metrics.get(
+                f"validation_{self.config.primary_metric}",
+                incumbent_metrics.get(self.config.primary_metric, 0.0),
+            )
+        )
         positive_rate = float(split_summary.get("validation_positive_rate", split_summary.get("train_positive_rate", 0.5)))
         diagnosis = diagnose_run_state(self.config, incumbent_metrics, split_summary, recent_entries=journal_entries).to_dict()
 
@@ -397,6 +404,7 @@ class AutonomousLoopController:
 
         return ProposalDecisionContext(
             dataset_key=self.registry_key,
+            task_kind=self.config.task.kind,
             primary_metric=self.config.primary_metric,
             promote_threshold=self.config.promote_if_delta_at_least,
             incumbent_run_id=None if incumbent is None else str(incumbent["run_id"]),

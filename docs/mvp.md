@@ -2,7 +2,7 @@
 
 ## Goal
 
-Build a disciplined autoresearch loop for single-table binary classification with XGBoost.
+Build a disciplined autoresearch loop for single-table tabular classification with XGBoost, starting with binary and multiclass problems.
 
 ## Phase 1: Baseline runner
 
