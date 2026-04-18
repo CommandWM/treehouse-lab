@@ -4,6 +4,7 @@ import pandas as pd
 import pytest
 
 from treehouse_lab.datasets import (
+    _validate_stratified_split_feasibility,
     inspect_binary_target,
     inspect_classification_target,
     normalize_binary_target,
@@ -79,3 +80,22 @@ def test_inspect_classification_target_reports_multiclass_shape() -> None:
     assert profile["multiclass_supported"] is True
     assert profile["class_count"] == 3
     assert profile["class_counts"] == {"0": 1, "1": 1, "2": 2}
+
+
+def test_validate_stratified_split_feasibility_allows_balanced_data() -> None:
+    target = pd.Series([0] * 10 + [1] * 10, name="churned")
+
+    _validate_stratified_split_feasibility(target, test_size=0.2, validation_size=0.2)
+
+
+def test_validate_stratified_split_feasibility_rejects_underrepresented_class() -> None:
+    target = pd.Series([0] * 20 + [1], name="churned")
+
+    with pytest.raises(ValueError, match="Stratified split is not feasible"):
+        _validate_stratified_split_feasibility(target, test_size=0.2, validation_size=0.2)
+
+
+def test_validate_stratified_split_feasibility_allows_small_but_feasible_minority() -> None:
+    target = pd.Series([0] * 20 + [1] * 4, name="churned")
+
+    _validate_stratified_split_feasibility(target, test_size=0.2, validation_size=0.2)

@@ -20,6 +20,8 @@ DEFAULT_LLM_SETTINGS: dict[str, Any] = {
     "openai_api_key": "",
 }
 
+OLLAMA_API_KEY_ENV_VARS = ("OLLAMA_API_KEY", "OLLAMA_CLOUD_KEY", "VIOLAAMA_CLOUD_KEY")
+
 
 def llm_settings_path(project_root: Path) -> Path:
     return project_root / SETTINGS_DIRNAME / SETTINGS_FILENAME
@@ -49,11 +51,11 @@ def save_llm_settings(project_root: Path, payload: dict[str, Any]) -> Path:
 def effective_llm_settings(project_root: Path, defaults: dict[str, Any]) -> dict[str, Any]:
     saved = load_llm_settings(project_root)
     resolved = dict(DEFAULT_LLM_SETTINGS)
-    env_map = {
+    env_map: dict[str, str | tuple[str, ...]] = {
         "provider": "TREEHOUSE_LAB_LLM_PROVIDER",
         "model": "TREEHOUSE_LAB_LLM_MODEL",
         "ollama_base_url": "TREEHOUSE_LAB_OLLAMA_BASE_URL",
-        "ollama_api_key": "OLLAMA_API_KEY",
+        "ollama_api_key": OLLAMA_API_KEY_ENV_VARS,
         "agent_cli": "TREEHOUSE_LAB_AGENT_CLI",
         "openai_compatible_base_url": "TREEHOUSE_LAB_OPENAI_COMPATIBLE_BASE_URL",
         "openai_compatible_api_key": "TREEHOUSE_LAB_OPENAI_COMPATIBLE_API_KEY",
@@ -69,7 +71,11 @@ def effective_llm_settings(project_root: Path, defaults: dict[str, Any]) -> dict
             resolved[key] = str(saved_value).strip()
             continue
         env_name = env_map.get(key)
-        env_value = "" if env_name is None else os.getenv(env_name, "").strip()
+        env_value = ""
+        if isinstance(env_name, tuple):
+            env_value = _resolve_first_env(env_name)
+        elif isinstance(env_name, str):
+            env_value = os.getenv(env_name, "").strip()
         resolved[key] = env_value or default_value
 
     return resolved
@@ -92,3 +98,11 @@ def _normalize_settings(payload: dict[str, Any] | None) -> dict[str, Any]:
         }
     )
     return normalized
+
+
+def _resolve_first_env(env_names: tuple[str, ...]) -> str:
+    for env_name in env_names:
+        env_value = os.getenv(env_name, "").strip()
+        if env_value:
+            return env_value
+    return ""

@@ -130,6 +130,12 @@ def split_dataset(bundle: DatasetBundle, config: ExperimentConfig) -> DatasetSpl
     if test_size <= 0 or validation_size <= 0 or test_size + validation_size >= 1:
         msg = "validation_size and test_size must both be positive and sum to less than 1."
         raise ValueError(msg)
+    if config.split.stratify:
+        _validate_stratified_split_feasibility(
+            bundle.target,
+            test_size=test_size,
+            validation_size=validation_size,
+        )
 
     stratify_values = bundle.target if config.split.stratify else None
     X_train_val, X_test, y_train_val, y_test = train_test_split(
@@ -163,6 +169,42 @@ def split_dataset(bundle: DatasetBundle, config: ExperimentConfig) -> DatasetSpl
         y_test=y_test.reset_index(drop=True),
         preprocessor=preprocessor,
     )
+
+
+def _validate_stratified_split_feasibility(
+    target: pd.Series,
+    *,
+    test_size: float,
+    validation_size: float,
+) -> None:
+    class_counts = target.value_counts()
+    class_distribution = {str(label): int(count) for label, count in class_counts.sort_index().items()}
+    formatted_distribution = ", ".join(f"{label}:{count}" for label, count in class_distribution.items())
+    row_index = np.arange(len(target))
+    try:
+        _, _, y_train_val, _ = train_test_split(
+            row_index,
+            target,
+            test_size=test_size,
+            random_state=0,
+            stratify=target,
+        )
+        validation_share_of_train_val = validation_size / (1 - test_size)
+        train_test_split(
+            np.arange(len(y_train_val)),
+            y_train_val,
+            test_size=validation_share_of_train_val,
+            random_state=0,
+            stratify=y_train_val,
+        )
+    except ValueError as exc:
+        msg = (
+            "Stratified split is not feasible for the requested train/validation/test fractions. "
+            f"split.test_size={test_size:.3f}, split.validation_size={validation_size:.3f}. "
+            f"Class counts: {formatted_distribution}. "
+            f"Original sklearn error: {exc}"
+        )
+        raise ValueError(msg) from exc
 
 
 def normalize_classification_target(

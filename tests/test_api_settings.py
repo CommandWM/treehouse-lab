@@ -167,3 +167,18 @@ def test_saved_settings_drive_advisor_without_env(
     assert response.json()["provider"] == "ollama"
     assert captured["url"] == "https://ollama.com/api/chat"
     assert captured["headers"]["Authorization"] == "Bearer rotated-key"
+
+
+def test_llm_settings_reads_ollama_cloud_key_alias_from_environment(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("TREEHOUSE_LAB_OLLAMA_BASE_URL", "https://ollama.com")
+    monkeypatch.setenv("VIOLAAMA_CLOUD_KEY", "alias-key")
+
+    response = client.get("/api/settings/llm")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["ollama_base_url"] == "https://ollama.com"
+    assert payload["ollama_api_key"] == "alias-key"
