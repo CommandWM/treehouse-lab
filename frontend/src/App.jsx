@@ -1,4 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
+import { Background, MarkerType, Position, ReactFlow } from "@xyflow/react";
+
+import "@xyflow/react/dist/style.css";
 
 const architectureFlow = [
   {
@@ -33,6 +36,45 @@ const architectureFlow = [
   },
 ];
 
+const architectureNodePositions = [
+  { x: 0, y: 32 },
+  { x: 280, y: 32 },
+  { x: 560, y: 32 },
+  { x: 560, y: 228 },
+  { x: 280, y: 228 },
+  { x: 0, y: 228 },
+];
+
+const architectureNodes = architectureFlow.map((stage, index) => ({
+  id: stage.id,
+  type: "architectureStage",
+  position: architectureNodePositions[index],
+  sourcePosition: index < 3 ? Position.Right : Position.Left,
+  targetPosition: index === 0 ? Position.Left : index < 4 ? Position.Left : Position.Right,
+  data: stage,
+}));
+
+const architectureEdges = [
+  ["01", "02", false],
+  ["02", "03", false],
+  ["03", "04", false],
+  ["04", "05", false],
+  ["05", "06", false],
+  ["06", "04", true],
+].map(([source, target, isLoop]) => ({
+  id: `${source}-${target}`,
+  source,
+  target,
+  animated: Boolean(isLoop),
+  type: isLoop ? "smoothstep" : "default",
+  markerEnd: { type: MarkerType.ArrowClosed, width: 16, height: 16 },
+  style: {
+    stroke: isLoop ? "rgba(212, 177, 103, 0.9)" : "rgba(141, 162, 197, 0.8)",
+    strokeDasharray: isLoop ? "6 6" : "none",
+    strokeWidth: isLoop ? 1.8 : 1.5,
+  },
+}));
+
 const operatingRules = [
   "Start from an explicit dataset spec, not hidden UI state.",
   "Keep the test set out of the search loop.",
@@ -66,6 +108,11 @@ const intakeDefaults = {
 };
 const defaultAdvisorQuestion = "What should I do next and why?";
 const journalPageSize = 8;
+
+function getDefaultSelectedKey(configPayload) {
+  const firstUserConfig = configPayload.find((config) => config.benchmark?.pack === "user");
+  return firstUserConfig?.key ?? "";
+}
 
 async function fetchJson(path, options = {}) {
   const response = await fetch(path, {
@@ -122,8 +169,7 @@ function App() {
         setConfigs(configPayload);
         setGlossary(glossaryPayload);
         setLlmSettings(settingsPayload);
-        const firstUserConfig = configPayload.find((config) => config.benchmark?.pack === "user");
-        setSelectedKey(firstUserConfig?.key ?? configPayload[0]?.key ?? "");
+        setSelectedKey(getDefaultSelectedKey(configPayload));
       } catch (loadError) {
         if (!cancelled) {
           setError(String(loadError.message || loadError));
@@ -142,6 +188,9 @@ function App() {
 
   useEffect(() => {
     if (!selectedKey) {
+      setState(null);
+      setJournal([]);
+      setSelectedRunId("");
       return;
     }
     let cancelled = false;
@@ -221,8 +270,7 @@ function App() {
     if (nextSelectedKey) {
       setSelectedKey(nextSelectedKey);
     } else {
-      const firstUserConfig = configPayload.find((config) => config.benchmark?.pack === "user");
-      setSelectedKey(firstUserConfig?.key ?? configPayload[0]?.key ?? "");
+      setSelectedKey(getDefaultSelectedKey(configPayload));
     }
   }
 
@@ -918,16 +966,7 @@ function renderActiveView(context) {
             </div>
             <div className="pill">selected config: {selectedConfig?.key ?? "none"}.yaml</div>
           </div>
-          <div className="flow-grid">
-            {architectureFlow.map((stage, index) => (
-              <article key={stage.id} className="flow-card">
-                <div className="stage-id">{stage.id}</div>
-                <h4>{stage.title}</h4>
-                <p>{stage.copy}</p>
-                {index < architectureFlow.length - 1 ? <div className="flow-arrow">→</div> : null}
-              </article>
-            ))}
-          </div>
+          <ArchitectureDiagram />
           <div className="signal-grid">
             <SignalCard
               label="Incumbent"
@@ -1428,6 +1467,46 @@ function SignalCard({ label, value, copy }) {
       <div className="signal-value">{value}</div>
       <div className="signal-copy">{copy}</div>
     </article>
+  );
+}
+
+function ArchitectureStageNode({ data }) {
+  return (
+    <div className="architecture-node">
+      <div className="architecture-node__id">{data.id}</div>
+      <h4>{data.title}</h4>
+      <p>{data.copy}</p>
+    </div>
+  );
+}
+
+const architectureNodeTypes = {
+  architectureStage: ArchitectureStageNode,
+};
+
+function ArchitectureDiagram() {
+  return (
+    <div className="architecture-diagram">
+      <ReactFlow
+        nodes={architectureNodes}
+        edges={architectureEdges}
+        nodeTypes={architectureNodeTypes}
+        fitView
+        nodesDraggable={false}
+        nodesConnectable={false}
+        elementsSelectable={false}
+        nodesFocusable={false}
+        panOnDrag={false}
+        panOnScroll={false}
+        zoomOnScroll={false}
+        zoomOnPinch={false}
+        zoomOnDoubleClick={false}
+        preventScrolling={false}
+        proOptions={{ hideAttribution: true }}
+      >
+        <Background gap={22} size={1} color="rgba(141, 162, 197, 0.12)" />
+      </ReactFlow>
+    </div>
   );
 }
 

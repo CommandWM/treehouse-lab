@@ -360,6 +360,66 @@ select {
   margin: 0.2rem 0 0.2rem;
 }
 
+.architecture-diagram {
+  height: 430px;
+  margin-bottom: 1rem;
+  border: 1px solid var(--line);
+  border-radius: 24px;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at top right, color-mix(in srgb, var(--accent) 10%, transparent), transparent 34%),
+    color-mix(in srgb, var(--panel) 95%, transparent);
+}
+
+.architecture-diagram .react-flow__renderer,
+.architecture-diagram .react-flow__viewport {
+  cursor: default;
+}
+
+.architecture-diagram .react-flow__edge-path {
+  stroke-linecap: round;
+}
+
+.architecture-diagram .react-flow__background {
+  opacity: 0.9;
+}
+
+.architecture-node {
+  width: 220px;
+  min-height: 124px;
+  padding: 0.95rem 1rem;
+  border: 1px solid color-mix(in srgb, var(--line) 92%, var(--accent));
+  border-radius: 22px;
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--panel-strong) 92%, transparent), color-mix(in srgb, var(--panel) 94%, transparent));
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.16);
+}
+
+.architecture-node h4 {
+  margin: 0.35rem 0 0.45rem;
+  font-size: 1rem;
+}
+
+.architecture-node p {
+  margin: 0;
+  font-size: 0.88rem;
+  line-height: 1.45;
+}
+
+.architecture-node__id {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--line) 88%, var(--accent));
+  color: var(--accent);
+  background: color-mix(in srgb, var(--panel) 82%, transparent);
+  font-size: 0.82rem;
+  font-weight: 800;
+}
+
 .flow-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -693,6 +753,10 @@ select {
 
   .hero h2 {
     font-size: 1.9rem;
+  }
+
+  .architecture-diagram {
+    height: 520px;
   }
 
   .flow-arrow {
