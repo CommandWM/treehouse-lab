@@ -11,7 +11,7 @@
 
 Treehouse Lab is a Karpathy-style autoresearch loop for tabular machine learning.
 
-Current checkpoint: `v1.0.1`. The repo now has a real end-to-end local workflow: dataset-first intake, bounded autoresearch loops, grounded LLM assistance, coach-triggered bounded execution, local settings for provider credentials, exportable model artifacts with optional container packaging, and explicit binary or multiclass classification support for XGBoost-first experiments.
+Current checkpoint: `v1.0.1`. The repo now has a real end-to-end local workflow: dataset-first intake, bounded autoresearch loops, grounded LLM assistance, coach-triggered bounded execution, local settings for provider credentials, exportable model artifacts with optional container packaging, explicit binary or multiclass classification support for XGBoost-first experiments, and a capped train-only feature-generation branch for plateaued loops.
 
 The idea is simple: give an agent a constrained playground around XGBoost-style models, let it propose experiments, run them safely, keep only the winners, and leave behind a readable research log instead of a pile of notebook debris.
 
@@ -359,7 +359,11 @@ The proposal engine currently prefers simple parameter-only moves first:
 - `capacity_increase`
 - `imbalance_adjustment`
 
-Feature generation is stage-gated but not yet fully executed. That is deliberate. The first goal is to prove disciplined iteration before adding a more complex branch.
+Once those bounded parameter moves plateau, the loop can now escalate to one explicit feature-generation branch:
+
+- `feature_generation_enable`
+
+That branch is still intentionally conservative. It fits a train-only numeric interaction plan with a hard feature cap, then reuses the same generated-feature contract for validation, test, and exported inference.
 
 ## Proposed architecture
 

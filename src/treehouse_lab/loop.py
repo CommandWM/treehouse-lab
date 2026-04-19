@@ -148,6 +148,7 @@ class AutonomousLoopController:
             hypothesis=proposal.hypothesis,
             metadata=metadata,
             base_params=proposal.base_params,
+            feature_generation=proposal.feature_generation,
         )
 
     def should_stop(self, history: list[LoopStepResult], max_steps: int) -> tuple[bool, str]:
@@ -332,6 +333,8 @@ class AutonomousLoopController:
                 "risk_level": candidate.proposal.risk_level,
                 "expected_upside": candidate.proposal.expected_upside,
                 "params_override": candidate.proposal.params_override,
+                "feature_generation": candidate.proposal.feature_generation,
+                "stage": candidate.proposal.stage,
             }
             for candidate in candidates
         ]
@@ -390,6 +393,9 @@ class AutonomousLoopController:
         )
         positive_rate = float(split_summary.get("validation_positive_rate", split_summary.get("train_positive_rate", 0.5)))
         diagnosis = diagnose_run_state(self.config, incumbent_metrics, split_summary, recent_entries=journal_entries).to_dict()
+        incumbent_feature_generation = {}
+        if incumbent_entry is not None:
+            incumbent_feature_generation = dict(incumbent_entry.get("proposal", {}).get("feature_generation", {}))
 
         recent_mutation_types = [
             entry.get("mutation_type")
@@ -429,6 +435,7 @@ class AutonomousLoopController:
             ],
             allow_feature_generation=bool(self.search_space.get("policy", {}).get("allow_feature_generation", False)),
             diagnosis=diagnosis,
+            incumbent_feature_generation=incumbent_feature_generation,
         )
 
     def _write_run_narrative(self, result: ExperimentResult, proposal: ExperimentProposal, narrative: Any) -> Path:

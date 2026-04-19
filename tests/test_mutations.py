@@ -131,3 +131,84 @@ def test_generate_candidates_skips_binary_only_imbalance_template_for_multiclass
     candidates = generate_candidates(context)
 
     assert all(candidate.proposal.mutation_type != "imbalance_adjustment" for candidate in candidates)
+
+
+def test_generate_candidates_adds_feature_generation_branch_after_plateau() -> None:
+    context = ProposalDecisionContext(
+        dataset_key="marketing-leads",
+        task_kind="binary_classification",
+        primary_metric="roc_auc",
+        promote_threshold=0.003,
+        incumbent_run_id="baseline-run",
+        incumbent_metric=0.91,
+        incumbent_params={
+            "n_estimators": 300,
+            "max_depth": 6,
+            "learning_rate": 0.05,
+            "min_child_weight": 1,
+            "subsample": 0.9,
+            "colsample_bytree": 0.8,
+        },
+        incumbent_metrics={
+            "roc_auc": 0.91,
+            "train_roc_auc": 0.935,
+            "validation_roc_auc": 0.91,
+            "test_roc_auc": 0.904,
+        },
+        split_summary={
+            "validation_positive_rate": 0.19,
+            "feature_count": 12,
+            "raw_numeric_feature_count": 4,
+        },
+        overfit_gap=0.025,
+        positive_rate=0.19,
+        search_space={
+            "xgboost": {
+                "max_depth": [2, 10],
+                "min_child_weight": [1, 10],
+                "subsample": [0.5, 1.0],
+                "colsample_bytree": [0.5, 1.0],
+                "learning_rate": [0.01, 0.3],
+                "n_estimators": [100, 600],
+            },
+            "feature_generation": {
+                "max_new_features": 6,
+                "top_k_numeric": 4,
+                "operations": ["square", "product"],
+                "tools": ["openfe"],
+            },
+        },
+        journal_entries=[
+            {
+                "name": "regularization-tighten",
+                "promoted": False,
+                "comparison_to_incumbent": {"delta": 0.001},
+                "proposal": {"mutation_type": "regularization_tighten"},
+            },
+            {
+                "name": "learning-rate-tradeoff",
+                "promoted": False,
+                "comparison_to_incumbent": {"delta": 0.0008},
+                "proposal": {"mutation_type": "learning_rate_tradeoff"},
+            },
+        ],
+        loop_step_index=2,
+        executed_mutation_types=["regularization_tighten", "learning_rate_tradeoff"],
+        executed_mutation_names=["regularization-tighten", "learning-rate-tradeoff"],
+        allow_feature_generation=True,
+        diagnosis={
+            "tags": ["plateau"],
+            "preferred_mutations": [],
+            "avoided_mutations": [],
+            "summary": "Recent bounded parameter moves have plateaued.",
+        },
+    )
+
+    candidates = generate_candidates(context)
+
+    feature_candidate = next(
+        candidate for candidate in candidates if candidate.proposal.mutation_type == "feature_generation_enable"
+    )
+    assert feature_candidate.proposal.stage == "feature_generation"
+    assert feature_candidate.proposal.feature_generation["enabled"] is True
+    assert feature_candidate.proposal.feature_generation["max_new_features"] == 6

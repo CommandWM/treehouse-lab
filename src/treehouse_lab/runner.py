@@ -18,6 +18,7 @@ from treehouse_lab.datasets import DatasetSplit, load_dataset, split_dataset
 from treehouse_lab.diagnosis import build_reason_codes, diagnose_run_state
 from treehouse_lab.evaluation import assess_run
 from treehouse_lab.exporting import ExportedModelBundle, save_exported_model_bundle
+from treehouse_lab.features import feature_plan_from_payload
 from treehouse_lab.journal import (
     append_journal_entry,
     ensure_run_directories,
@@ -90,6 +91,7 @@ class ExperimentResult:
     assessment: dict[str, Any]
     diagnosis: dict[str, Any]
     reason_codes: list[str]
+    feature_generation: dict[str, Any] = field(default_factory=dict)
     metadata: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
@@ -120,6 +122,7 @@ class TreehouseLabRunner:
         hypothesis: str | None = None,
         metadata: dict[str, Any] | None = None,
         base_params: dict[str, Any] | None = None,
+        feature_generation: dict[str, Any] | None = None,
     ) -> ExperimentResult:
         candidate_hypothesis = hypothesis or "A bounded parameter mutation can outperform the incumbent."
         return self._run_experiment(
@@ -128,6 +131,7 @@ class TreehouseLabRunner:
             hypothesis=candidate_hypothesis,
             metadata=metadata,
             base_params=base_params,
+            feature_generation=feature_generation,
         )
 
     def _run_experiment(
@@ -137,10 +141,21 @@ class TreehouseLabRunner:
         hypothesis: str,
         metadata: dict[str, Any] | None,
         base_params: dict[str, Any] | None = None,
+        feature_generation: dict[str, Any] | None = None,
     ) -> ExperimentResult:
         run_started = time.perf_counter()
         dataset = load_dataset(self.config, self.project_root)
-        split = split_dataset(dataset, self.config)
+        feature_generation_plan = feature_plan_from_payload(feature_generation)
+        split = split_dataset(dataset, self.config, feature_generation_plan=feature_generation_plan)
+        feature_generation_summary = {
+            "enabled": bool(feature_generation_plan and feature_generation_plan.enabled),
+            "plan": {} if feature_generation_plan is None else feature_generation_plan.to_dict(),
+            "applied": bool(split.preprocessor.generated_feature_specs),
+            "generated_feature_count": int(len(split.preprocessor.generated_feature_specs)),
+            "generated_feature_specs": list(split.preprocessor.generated_feature_specs),
+        }
+        resolved_metadata = dict(metadata or {})
+        resolved_metadata["feature_generation_summary"] = feature_generation_summary
         params = self._resolve_model_params(
             overrides,
             base_params=base_params,
@@ -191,7 +206,7 @@ class TreehouseLabRunner:
             assessment=assessment.to_dict(),
             diagnosis=diagnosis.to_dict(),
             reason_codes=reason_codes,
-            metadata=metadata or {},
+            metadata=resolved_metadata,
         )
         self._log_mlflow_if_available(
             run_id,
@@ -201,7 +216,7 @@ class TreehouseLabRunner:
             metrics,
             promoted,
             artifact_dir,
-            metadata or {},
+            resolved_metadata,
         )
 
         result = ExperimentResult(
@@ -223,7 +238,8 @@ class TreehouseLabRunner:
             assessment=assessment.to_dict(),
             diagnosis=diagnosis.to_dict(),
             reason_codes=reason_codes,
-            metadata=metadata or {},
+            feature_generation=feature_generation_summary,
+            metadata=resolved_metadata,
         )
         self._record_journal(result)
         return result
@@ -368,6 +384,7 @@ class TreehouseLabRunner:
         context_path = artifact_dir / "run_context.json"
         assessment_path = artifact_dir / "assessment.json"
         diagnosis_path = artifact_dir / "diagnosis.json"
+        feature_generation_path = artifact_dir / "feature_generation.json"
         summary_path = artifact_dir / "summary.md"
         importances_path = artifact_dir / "feature_importances.csv"
         model_bundle_path = artifact_dir / "model_bundle.pkl"
@@ -381,6 +398,11 @@ class TreehouseLabRunner:
         context_path.write_text(json.dumps(metadata, indent=2, sort_keys=True), encoding="utf-8")
         assessment_path.write_text(json.dumps(assessment, indent=2, sort_keys=True), encoding="utf-8")
         diagnosis_path.write_text(json.dumps(diagnosis, indent=2, sort_keys=True), encoding="utf-8")
+        feature_generation_payload = metadata.get("feature_generation_summary", {})
+        feature_generation_path.write_text(
+            json.dumps(feature_generation_payload, indent=2, sort_keys=True),
+            encoding="utf-8",
+        )
 
         importance_frame = pd.DataFrame(
             {
@@ -445,6 +467,7 @@ class TreehouseLabRunner:
                     "assessment": assessment,
                     "diagnosis": diagnosis,
                     "reason_codes": reason_codes,
+                    "feature_generation": feature_generation_payload,
                 },
             )
 
@@ -479,6 +502,38 @@ class TreehouseLabRunner:
             f"- decision: `{'promote' if promoted else 'reject'}`",
             f"- explanation: {decision_reason}",
         ]
+        feature_generation = metadata.get("proposal", {}).get("feature_generation", {})
+        if not feature_generation and metadata.get("feature_generation"):
+            feature_generation = metadata.get("feature_generation", {})
+        feature_generation_summary = metadata.get("feature_generation_summary", {})
+        feature_generation_plan = feature_generation_summary.get("plan", {})
+        feature_generation_enabled = bool(
+            feature_generation.get("enabled") or feature_generation_summary.get("enabled") or feature_generation_plan.get("enabled")
+        )
+        if feature_generation_enabled:
+            strategy = (
+                feature_generation.get("strategy")
+                or feature_generation_plan.get("strategy")
+                or "unspecified"
+            )
+            lines.extend(
+                [
+                    f"- feature_generation_strategy: `{strategy}`",
+                    f"- generated_feature_count: `{feature_generation_summary.get('generated_feature_count', split_summary.get('generated_feature_count', 0))}`",
+                ]
+            )
+        if feature_generation_summary.get("generated_feature_specs"):
+            lines.extend(
+                [
+                    "",
+                    "## Generated features",
+                    "",
+                    *(
+                        f"- `{spec['name']}` via `{spec['operation']}` on `{', '.join(spec.get('columns', []))}`"
+                        for spec in feature_generation_summary["generated_feature_specs"]
+                    ),
+                ]
+            )
         if self.config.benchmark.objective:
             lines.append(f"- benchmark_objective: {self.config.benchmark.objective}")
         if metadata:

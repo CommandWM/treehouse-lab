@@ -42,6 +42,7 @@ Exit criteria:
 ## Phase 4: Feature generation
 
 Deliverables:
+- deterministic train-only numeric interaction generation with hard caps
 - optional OpenFE integration
 - feature budget caps
 - leakage-safe transform policy
@@ -49,6 +50,10 @@ Deliverables:
 
 Exit criteria:
 - generated features can help when useful without turning the project into a science fair
+
+Status:
+- the bounded numeric interaction branch now exists in-repo
+- broader OpenFE integration is still future work
 
 ## Phase 5: Shareability
 

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
 import numpy as np
@@ -9,6 +9,7 @@ from sklearn.datasets import load_breast_cancer
 from sklearn.model_selection import train_test_split
 
 from treehouse_lab.config import ExperimentConfig
+from treehouse_lab.features import FeatureGenerationPlan, apply_generated_features, fit_generated_feature_specs
 
 
 @dataclass(slots=True)
@@ -35,6 +36,9 @@ class DatasetSplit:
             "validation_rows": int(len(self.X_val)),
             "test_rows": int(len(self.X_test)),
             "feature_count": int(self.X_train.shape[1]),
+            "generated_feature_count": int(len(self.preprocessor.generated_feature_specs)),
+            "raw_numeric_feature_count": int(len(self.preprocessor.numeric_columns)),
+            "categorical_feature_count": int(len(self.preprocessor.categorical_feature_names)),
             "class_count": int(pd.concat([self.y_train, self.y_val, self.y_test], ignore_index=True).nunique()),
             "train_class_distribution": _class_distribution(self.y_train),
             "validation_class_distribution": _class_distribution(self.y_val),
@@ -54,6 +58,7 @@ class FeaturePreprocessor:
     categorical_columns: list[str]
     fill_values: dict[str, float]
     categorical_feature_names: list[str]
+    generated_feature_specs: list[dict[str, object]] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, object]:
         return asdict(self)
@@ -124,7 +129,11 @@ def load_dataset(config: ExperimentConfig, project_root: Path) -> DatasetBundle:
     raise ValueError(msg)
 
 
-def split_dataset(bundle: DatasetBundle, config: ExperimentConfig) -> DatasetSplit:
+def split_dataset(
+    bundle: DatasetBundle,
+    config: ExperimentConfig,
+    feature_generation_plan: FeatureGenerationPlan | None = None,
+) -> DatasetSplit:
     test_size = config.split.test_size
     validation_size = config.split.validation_size
     if test_size <= 0 or validation_size <= 0 or test_size + validation_size >= 1:
@@ -155,7 +164,11 @@ def split_dataset(bundle: DatasetBundle, config: ExperimentConfig) -> DatasetSpl
         random_state=config.seed,
         stratify=stratify_train_val,
     )
-    preprocessor = fit_feature_preprocessor(X_train_raw)
+    preprocessor = fit_feature_preprocessor(
+        X_train_raw,
+        target=y_train,
+        feature_generation_plan=feature_generation_plan,
+    )
     X_train = transform_feature_frame(X_train_raw, preprocessor)
     X_val = transform_feature_frame(X_val_raw, preprocessor)
     X_test = transform_feature_frame(X_test, preprocessor)
@@ -290,7 +303,11 @@ def prepare_feature_frames(
     )
 
 
-def fit_feature_preprocessor(frame: pd.DataFrame) -> FeaturePreprocessor:
+def fit_feature_preprocessor(
+    frame: pd.DataFrame,
+    target: pd.Series | None = None,
+    feature_generation_plan: FeatureGenerationPlan | None = None,
+) -> FeaturePreprocessor:
     train_frame = frame.reset_index(drop=True).copy()
     categorical_columns = list(train_frame.select_dtypes(include=["object", "category", "bool"]).columns)
     numeric_columns = [column for column in train_frame.columns if column not in categorical_columns]
@@ -301,6 +318,9 @@ def fit_feature_preprocessor(frame: pd.DataFrame) -> FeaturePreprocessor:
         for column, value in train_numeric.median(numeric_only=True).fillna(0.0).items()
     }
     train_categorical = _prepare_categorical_frame(train_frame, categorical_columns)
+    generated_feature_specs: list[dict[str, object]] = []
+    if feature_generation_plan is not None and feature_generation_plan.enabled and target is not None:
+        generated_feature_specs = fit_generated_feature_specs(train_numeric, target, feature_generation_plan)
 
     return FeaturePreprocessor(
         input_columns=list(train_frame.columns),
@@ -308,6 +328,7 @@ def fit_feature_preprocessor(frame: pd.DataFrame) -> FeaturePreprocessor:
         categorical_columns=categorical_columns,
         fill_values=fill_values,
         categorical_feature_names=list(train_categorical.columns),
+        generated_feature_specs=generated_feature_specs,
     )
 
 
@@ -324,6 +345,7 @@ def transform_feature_frame(frame: pd.DataFrame, preprocessor: FeaturePreprocess
     if preprocessor.numeric_columns:
         fill_values = pd.Series(preprocessor.fill_values)
         numeric_frame = numeric_frame.fillna(fill_values)
+    numeric_frame = apply_generated_features(numeric_frame, preprocessor.generated_feature_specs)
 
     categorical_frame = _prepare_categorical_frame(feature_frame, preprocessor.categorical_columns).reindex(
         columns=preprocessor.categorical_feature_names,

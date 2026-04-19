@@ -49,6 +49,7 @@ class ProposalDecisionContext:
     executed_mutation_names: list[str]
     allow_feature_generation: bool
     diagnosis: dict[str, Any]
+    incumbent_feature_generation: dict[str, Any] = field(default_factory=dict)
 
 
 def build_baseline_proposal(dataset_key: str, hypothesis: str) -> ExperimentProposal:
@@ -76,6 +77,8 @@ def build_mutation_proposal(
     risk_level: str,
     params_override: dict[str, Any],
     score: float,
+    feature_generation: dict[str, Any] | None = None,
+    stage: str = "parameter_tuning",
 ) -> ExperimentProposal:
     return ExperimentProposal(
         proposal_id=_proposal_id(),
@@ -89,8 +92,9 @@ def build_mutation_proposal(
         risk_level=risk_level,
         base_params=dict(context.incumbent_params),
         params_override=params_override,
+        feature_generation={} if feature_generation is None else dict(feature_generation),
         depends_on_run_id=context.incumbent_run_id,
-        stage="parameter_tuning",
+        stage=stage,
         loop_step_index=context.loop_step_index,
         score=score,
     )

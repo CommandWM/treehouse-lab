@@ -47,6 +47,7 @@ class CandidateRequest(BaseModel):
     mutation_name: str = Field(min_length=1)
     hypothesis: str | None = None
     overrides: dict[str, Any] = Field(default_factory=dict)
+    feature_generation: dict[str, Any] = Field(default_factory=dict)
 
 
 class LoopRequest(BaseModel):
@@ -450,6 +451,7 @@ def get_run(run_id: str) -> dict[str, Any]:
             "proposal": _load_run_artifact_json(artifact_dir, "proposal.json"),
             "assessment": _load_run_artifact_json(artifact_dir, "assessment.json"),
             "diagnosis": _load_run_artifact_json(artifact_dir, "diagnosis.json"),
+            "feature_generation": _load_run_artifact_json(artifact_dir, "feature_generation.json"),
             "run_context": _load_run_artifact_json(artifact_dir, "run_context.json"),
         },
     }
@@ -522,6 +524,7 @@ def run_candidate(config_key: str, payload: CandidateRequest) -> dict[str, Any]:
         mutation_name=payload.mutation_name,
         overrides=payload.overrides,
         hypothesis=payload.hypothesis,
+        feature_generation=payload.feature_generation or None,
     ).to_dict()
 
 

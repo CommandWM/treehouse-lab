@@ -559,3 +559,59 @@ def test_run_coach_recommendation_executes_bounded_proposal(
     assert payload["result"]["run_id"] == "20260418T160000000000Z-imbalance-adjustment"
     assert captured["mutation_type"] == "imbalance_adjustment"
     assert captured["preview_follow_up"] is True
+
+
+def test_candidate_endpoint_accepts_feature_generation_payload(
+    client: TestClient,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    write_config(tmp_path / "configs" / "datasets")
+    captured: dict[str, object] = {}
+
+    class StubRunner:
+        def __init__(self, config_path: Path) -> None:
+            captured["config_path"] = str(config_path)
+
+        def run_candidate(
+            self,
+            mutation_name: str,
+            overrides: dict[str, object],
+            hypothesis: str | None = None,
+            feature_generation: dict[str, object] | None = None,
+        ) -> SimpleNamespace:
+            captured["mutation_name"] = mutation_name
+            captured["overrides"] = overrides
+            captured["hypothesis"] = hypothesis
+            captured["feature_generation"] = feature_generation
+            return SimpleNamespace(
+                to_dict=lambda: {
+                    "name": mutation_name,
+                    "hypothesis": hypothesis,
+                    "metadata": {"feature_generation": feature_generation},
+                }
+            )
+
+    monkeypatch.setattr(api, "TreehouseLabRunner", StubRunner)
+
+    response = client.post(
+        "/api/configs/bank-valid-test/candidate",
+        json={
+            "mutation_name": "feature-generation-enable",
+            "hypothesis": "Try a capped numeric interaction branch.",
+            "overrides": {},
+            "feature_generation": {
+                "enabled": True,
+                "strategy": "train_only_supervised_numeric_interactions",
+                "max_new_features": 6,
+            },
+        },
+    )
+
+    assert response.status_code == 200
+    assert captured["mutation_name"] == "feature-generation-enable"
+    assert captured["feature_generation"] == {
+        "enabled": True,
+        "strategy": "train_only_supervised_numeric_interactions",
+        "max_new_features": 6,
+    }

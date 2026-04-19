@@ -367,6 +367,28 @@ function App() {
     }
   }
 
+  async function handleRunSuggestedProposal() {
+    const mutationType = nextProposal?.mutation_type;
+    if (!selectedKey || !mutationType) {
+      return;
+    }
+
+    setBusyAction("suggested-proposal");
+    setError("");
+    try {
+      await fetchJson(`/api/configs/${selectedKey}/coach-recommendation/run`, {
+        method: "POST",
+        body: JSON.stringify({ mutation_type: mutationType }),
+      });
+      await refreshSelected();
+      setActiveView("journal");
+    } catch (actionError) {
+      setError(String(actionError.message || actionError));
+    } finally {
+      setBusyAction("");
+    }
+  }
+
   async function handleExportModel() {
     if (!selectedKey) {
       return;
@@ -645,6 +667,7 @@ function App() {
           setAdvisorQuestion,
           handleAskAdvisor,
           handleRunCoachRecommendation,
+          handleRunSuggestedProposal,
           handleSaveLlmSettings,
         })}
       </main>
@@ -687,6 +710,7 @@ function renderActiveView(context) {
     setAdvisorQuestion,
     handleAskAdvisor,
     handleRunCoachRecommendation,
+    handleRunSuggestedProposal,
     handleSaveLlmSettings,
   } = context;
 
@@ -1148,6 +1172,10 @@ function renderActiveView(context) {
                 <p className="lead-copy">{nextProposal.hypothesis}</p>
                 <dl className="detail-list">
                   <div>
+                    <dt>Stage</dt>
+                    <dd>{nextProposal.stage ?? "parameter_tuning"}</dd>
+                  </div>
+                  <div>
                     <dt>Risk</dt>
                     <dd>{nextProposal.risk_level}</dd>
                   </div>
@@ -1160,11 +1188,26 @@ function renderActiveView(context) {
                     <dd>{Object.keys(nextProposal.params_override ?? {}).length}</dd>
                   </div>
                 </dl>
+                <ProposalExecutionCard proposal={nextProposal} />
                 <LlmReviewCard review={nextProposal.llm_review} />
+                <button
+                  type="button"
+                  className="action-button action-button--secondary"
+                  onClick={handleRunSuggestedProposal}
+                  disabled={busyAction !== ""}
+                >
+                  {busyAction === "suggested-proposal" ? "Running suggested proposal…" : "Run Suggested Proposal"}
+                </button>
                 <details className="detail-box">
                   <summary>Parameter overrides</summary>
                   <pre>{JSON.stringify(nextProposal.params_override, null, 2)}</pre>
                 </details>
+                {hasFeatureGeneration(nextProposal) ? (
+                  <details className="detail-box">
+                    <summary>Feature generation plan</summary>
+                    <pre>{JSON.stringify(nextProposal.feature_generation, null, 2)}</pre>
+                  </details>
+                ) : null}
                 <details className="detail-box">
                   <summary>Proposal details</summary>
                   <pre>{JSON.stringify(nextProposal, null, 2)}</pre>
@@ -1226,13 +1269,7 @@ function renderActiveView(context) {
                     <p>
                       Run the bounded <code>{advisor.recommended_proposal.mutation_name}</code> template next.
                     </p>
-                    <div className="chip-group">
-                      <span className="chip">risk: {advisor.recommended_proposal.risk_level}</span>
-                      <span className="chip">upside: {advisor.recommended_proposal.expected_upside}</span>
-                      <span className="chip">
-                        overrides: {Object.keys(advisor.recommended_proposal.params_override ?? {}).length}
-                      </span>
-                    </div>
+                    <ProposalExecutionCard proposal={advisor.recommended_proposal} />
                     <LlmReviewCard review={advisor.recommended_proposal.llm_review} />
                     <button
                       type="button"
@@ -1316,11 +1353,18 @@ function renderActiveView(context) {
             <>
               <h3>{activeRun.name}</h3>
               <div className="signal-grid signal-grid--compact signal-grid--inspector">
-                <SignalCard label="Metric" value={Number(activeRun.metric ?? 0).toFixed(4)} copy="Validation primary metric." />
-                <SignalCard label="Decision" value={activeRun.promoted ? "promote" : "reject"} copy={activeRun.decision_reason} />
-                <SignalCard label="Diagnosis" value={activeRun.diagnosis?.primary_tag ?? "n/a"} copy="Primary diagnosis tag." />
-                <SignalCard label="Readiness" value={activeRun.assessment?.implementation_readiness ?? "n/a"} copy="Current implementation-readiness label." />
-              </div>
+              <SignalCard label="Metric" value={Number(activeRun.metric ?? 0).toFixed(4)} copy="Validation primary metric." />
+              <SignalCard label="Decision" value={activeRun.promoted ? "promote" : "reject"} copy={activeRun.decision_reason} />
+              <SignalCard label="Diagnosis" value={activeRun.diagnosis?.primary_tag ?? "n/a"} copy="Primary diagnosis tag." />
+              <SignalCard label="Readiness" value={activeRun.assessment?.implementation_readiness ?? "n/a"} copy="Current implementation-readiness label." />
+            </div>
+              <ProposalExecutionCard proposal={activeRun.proposal ?? runDetail?.artifacts?.proposal ?? null} />
+              {activeRun.feature_generation?.enabled || runDetail?.artifacts?.feature_generation?.enabled ? (
+                <details className="detail-box" open>
+                  <summary>Feature generation</summary>
+                  <pre>{JSON.stringify(activeRun.feature_generation ?? runDetail?.artifacts?.feature_generation ?? {}, null, 2)}</pre>
+                </details>
+              ) : null}
               <LlmReviewCard review={activeRun.proposal?.llm_review ?? runDetail?.artifacts?.proposal?.llm_review} />
               <details className="detail-box" open>
                 <summary>Reason codes</summary>
@@ -1417,6 +1461,40 @@ function LlmReviewCard({ review }) {
   );
 }
 
+function ProposalExecutionCard({ proposal }) {
+  if (!proposal) {
+    return null;
+  }
+
+  const featureGeneration = proposal.feature_generation ?? {};
+  const featureEnabled = hasFeatureGeneration(proposal);
+
+  return (
+    <div className="note-card note-card--tight">
+      <strong>Execution shape</strong>
+      <div className="chip-group">
+        <span className="chip">stage: {proposal.stage ?? "parameter_tuning"}</span>
+        <span className="chip">risk: {proposal.risk_level ?? "n/a"}</span>
+        <span className="chip">overrides: {Object.keys(proposal.params_override ?? {}).length}</span>
+        {featureEnabled ? (
+          <>
+            <span className="chip">feature branch: enabled</span>
+            <span className="chip">strategy: {featureGeneration.strategy ?? "unspecified"}</span>
+            <span className="chip">cap: {featureGeneration.max_new_features ?? 0}</span>
+          </>
+        ) : (
+          <span className="chip">feature branch: off</span>
+        )}
+      </div>
+      <p className="detail-copy">
+        {featureEnabled
+          ? featureGeneration.reason ?? "This bounded move adds a capped train-only feature branch."
+          : proposal.expected_upside ?? "This bounded move stays in parameter space."}
+      </p>
+    </div>
+  );
+}
+
 function PaginationControls({ currentPage, totalPages, onPageChange }) {
   if (totalPages <= 1) {
     return null;
@@ -1494,6 +1572,10 @@ function buildHeroCopy(activeView, hasSelectedDataset) {
     body: "The product should start here: point to a CSV, validate the target, generate the spec, and then decide whether to run the baseline.",
     pills: ["inspect", "create config", "run baseline"],
   };
+}
+
+function hasFeatureGeneration(proposal) {
+  return Boolean(proposal?.feature_generation?.enabled);
 }
 
 

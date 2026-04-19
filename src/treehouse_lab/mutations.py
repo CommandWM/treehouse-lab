@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
+from treehouse_lab.features import build_feature_plan
 from treehouse_lab.proposals import ExperimentProposal, ProposalDecisionContext, build_mutation_proposal
 
 
@@ -51,13 +52,23 @@ def list_templates(stage: str = "parameter_tuning") -> list[MutationTemplate]:
             base_score=0.7,
             risk_level="medium",
         ),
+        MutationTemplate(
+            name="feature_generation_enable",
+            stage="feature_generation",
+            description="Add a capped train-only numeric interaction branch once parameter-only moves plateau.",
+            base_score=0.65,
+            risk_level="medium",
+        ),
     ]
     return [template for template in templates if template.stage == stage]
 
 
 def generate_candidates(context: ProposalDecisionContext) -> list[MutationCandidate]:
     candidates: list[MutationCandidate] = []
-    for template in list_templates():
+    templates = list_templates("parameter_tuning")
+    if context.allow_feature_generation:
+        templates.extend(list_templates("feature_generation"))
+    for template in templates:
         if template.name == "imbalance_adjustment" and context.task_kind != "binary_classification":
             continue
         proposal = _proposal_for_template(template, context)
@@ -97,6 +108,26 @@ def apply_template(template: MutationTemplate, incumbent_params: dict[str, Any],
 
 
 def _proposal_for_template(template: MutationTemplate, context: ProposalDecisionContext) -> ExperimentProposal | None:
+    if template.name == "feature_generation_enable":
+        if context.incumbent_feature_generation.get("enabled"):
+            return None
+        feature_generation = _feature_generation_payload(context)
+        if feature_generation is None:
+            return None
+        return build_mutation_proposal(
+            context=context,
+            mutation_type=template.name,
+            mutation_name=template.name.replace("_", "-"),
+            hypothesis=_hypothesis_for_template(template),
+            rationale=_rationale_for_template(template, context),
+            expected_upside=_expected_upside_for_template(template),
+            risk_level=template.risk_level,
+            params_override={},
+            feature_generation=feature_generation,
+            stage="feature_generation",
+            score=_score_template(template, context),
+        )
+
     params_override = apply_template(template, context.incumbent_params, context.search_space["xgboost"], context.positive_rate)
     if not _is_meaningful_change(context.incumbent_params, params_override):
         return None
@@ -134,6 +165,15 @@ def _score_template(template: MutationTemplate, context: ProposalDecisionContext
         score += 0.6 if overfit_gap < 0.015 else -0.3
     if template.name == "imbalance_adjustment":
         score += 0.6 if positive_rate_delta > 0.15 else -0.8
+    if template.name == "feature_generation_enable":
+        numeric_feature_count = int(
+            context.split_summary.get(
+                "raw_numeric_feature_count",
+                context.split_summary.get("feature_count", 0),
+            )
+        )
+        score += 1.0 if "plateau" in diagnosis_tags else -0.6
+        score += 0.4 if numeric_feature_count >= 3 else -0.9
 
     if template.name in preferred_mutations:
         score += 1.2
@@ -162,6 +202,9 @@ def _hypothesis_for_template(template: MutationTemplate) -> str:
         "learning_rate_tradeoff": "A slower learner with more boosting rounds may improve validation stability without blowing up runtime.",
         "capacity_increase": "A slightly larger ensemble may recover signal if the incumbent is underfit.",
         "imbalance_adjustment": "Explicit positive-class weighting may improve ranking quality on skewed targets.",
+        "feature_generation_enable": (
+            "A small train-only interaction branch may expose residual signal once bounded parameter tuning has plateaued."
+        ),
     }
     return hypotheses[template.name]
 
@@ -185,6 +228,12 @@ def _rationale_for_template(template: MutationTemplate, context: ProposalDecisio
             f"Diagnosis: {diagnosis_summary} "
             "A modest capacity increase is only justified if the incumbent still looks signal-limited after bounded regularization."
         )
+    if template.name == "feature_generation_enable":
+        return (
+            f"Diagnosis: {diagnosis_summary} "
+            "Recent bounded parameter moves have flattened out, so the next explicit branch is a capped train-only numeric "
+            "interaction pass rather than wider hyperparameter churn."
+        )
     return (
         f"Diagnosis: {diagnosis_summary} "
         f"The positive-class rate is {context.positive_rate:.3f}, which is far enough from parity to justify "
@@ -198,8 +247,41 @@ def _expected_upside_for_template(template: MutationTemplate) -> str:
         "learning_rate_tradeoff": "A modest lift from smoother boosting dynamics.",
         "capacity_increase": "Recovered signal if the current incumbent is leaving performance on the table.",
         "imbalance_adjustment": "Improved ranking on the positive class without changing the dataset split policy.",
+        "feature_generation_enable": "Recover interaction signal without touching the split policy or opening unconstrained feature search.",
     }
     return outcomes[template.name]
+
+
+def _feature_generation_payload(context: ProposalDecisionContext) -> dict[str, Any] | None:
+    if not context.allow_feature_generation:
+        return None
+
+    numeric_feature_count = int(
+        context.split_summary.get(
+            "raw_numeric_feature_count",
+            context.split_summary.get("feature_count", 0),
+        )
+    )
+    if numeric_feature_count < 2:
+        return None
+
+    diagnosis_tags = set(context.diagnosis.get("tags", []))
+    recent_deltas = [
+        abs(float(entry.get("comparison_to_incumbent", {}).get("delta")))
+        for entry in context.journal_entries[-3:]
+        if entry.get("comparison_to_incumbent", {}).get("delta") is not None
+    ]
+    plateaued = "plateau" in diagnosis_tags or (
+        len(recent_deltas) >= 2 and all(delta < context.promote_threshold for delta in recent_deltas[-2:])
+    )
+    if not plateaued:
+        return None
+
+    plan = build_feature_plan(context.search_space, enabled=True).to_dict()
+    plan["reason"] = (
+        "Recent bounded parameter moves plateaued, so Treehouse Lab can try a capped train-only numeric interaction branch."
+    )
+    return plan
 
 
 def _is_meaningful_change(incumbent_params: dict[str, Any], overrides: dict[str, Any]) -> bool:

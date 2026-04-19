@@ -13,6 +13,7 @@ from treehouse_lab.exporting import (
     load_exported_model_bundle,
     save_exported_model_bundle,
 )
+from treehouse_lab.features import build_feature_plan
 from treehouse_lab.journal import append_journal_entry, save_incumbent
 
 
@@ -63,6 +64,54 @@ def test_exported_model_bundle_scores_raw_records(tmp_path: Path) -> None:
 
     assert len(predictions) == 2
     assert set(predictions[0]) == {"prediction", "score"}
+    assert all(0.0 <= row["score"] <= 1.0 for row in predictions)
+
+
+def test_exported_model_bundle_scores_raw_records_with_generated_features(tmp_path: Path) -> None:
+    frame, target = make_training_frame()
+    feature_plan = build_feature_plan(
+        {
+            "feature_generation": {
+                "max_new_features": 4,
+                "top_k_numeric": 3,
+                "operations": ["square", "product"],
+            }
+        },
+        enabled=True,
+    )
+    preprocessor = fit_feature_preprocessor(frame, target=target, feature_generation_plan=feature_plan)
+    prepared = transform_feature_frame(frame, preprocessor)
+    model = GradientBoostingClassifier(random_state=42)
+    model.fit(prepared, target)
+
+    bundle = ExportedModelBundle(
+        run_id="run-feature-123",
+        registry_key="marketing-leads",
+        config_path=str(tmp_path / "configs" / "datasets" / "marketing-leads.yaml"),
+        target_name="converted",
+        task_kind="binary_classification",
+        class_labels=["no", "yes"],
+        primary_metric="roc_auc",
+        backend="sklearn_gradient_boosting",
+        threshold=0.5,
+        feature_preprocessor=preprocessor,
+        model_params={"random_state": 42},
+        metrics={"roc_auc": 0.92},
+        model=model,
+    )
+    bundle_path = tmp_path / "model_bundle_with_features.pkl"
+    save_exported_model_bundle(bundle, bundle_path)
+
+    loaded = load_exported_model_bundle(bundle_path)
+    predictions = loaded.predict_records(
+        [
+            {"age": 31, "segment": "pro", "visits": 7},
+            {"age": 23, "segment": "basic", "visits": 1},
+        ]
+    )
+
+    assert loaded.feature_preprocessor.generated_feature_specs
+    assert len(predictions) == 2
     assert all(0.0 <= row["score"] <= 1.0 for row in predictions)
 
 
