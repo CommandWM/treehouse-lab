@@ -106,6 +106,35 @@ python3 scripts/fetch_adult.py
 python3 scripts/fetch_covertype.py
 ```
 
+## Fixed public suite
+
+The first v1.3 benchmark contract lives at:
+
+```bash
+configs/benchmark_suites/public_v1_3.yaml
+```
+
+Run it without optional AutoGluon when you want a fast Treehouse/plain-XGBoost pass:
+
+```bash
+treehouse-lab benchmark-suite configs/benchmark_suites/public_v1_3.yaml --skip-autogluon
+```
+
+Run it with the practical AutoGluon reference after preparing the benchmark environment:
+
+```bash
+./scripts/setup_benchmark_env.sh
+.venv-benchmarks/bin/python -m treehouse_lab.cli benchmark-suite configs/benchmark_suites/public_v1_3.yaml
+```
+
+The suite keeps the public benchmark story small and fixed:
+
+- Bank Marketing: mixed-type imbalanced business classification
+- Adult: mixed-type census-income classification with missing categorical values
+- Covertype: larger multiclass land-cover classification
+
+The suite currently compares plain XGBoost, Treehouse baseline, Treehouse bounded loop, and practical AutoGluon. FLAML is intentionally tracked as the next external runner rather than bundled into this first suite contract.
+
 ## 2.0 benchmark direction
 
 For `2.0`, the benchmark story should widen in one specific way: external comparison without turning the repo into a model zoo.

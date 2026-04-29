@@ -1,0 +1,39 @@
+suite:
+  key: public_v1_3
+  name: Public v1.3 Benchmark Suite
+  description: Small fixed-seed public comparison suite for validating Treehouse Lab against explicit external baselines without widening the core learner surface.
+  fixed_seed: 42
+  loop_steps: 3
+  autogluon_profile: practical
+  runners:
+    included:
+      - plain_xgboost_baseline
+      - treehouse_lab_baseline
+      - treehouse_lab_bounded_loop
+      - autogluon_tabular_practical
+    planned:
+      - flaml_comparison_runner
+
+datasets:
+  - key: bank_marketing_uci
+    config: ../datasets/bank_marketing_uci.yaml
+    fetch_command: python3 scripts/fetch_bank_marketing.py
+    notes:
+      - Mixed-type imbalanced binary business classification.
+      - Good first public comparison because the domain is implementation-minded.
+
+  - key: adult_uci
+    config: ../datasets/adult_uci.yaml
+    fetch_command: python3 scripts/fetch_adult.py
+    notes:
+      - Classic mixed-type census-income benchmark with missing categorical values.
+      - Useful for checking whether the loop generalizes beyond one business dataset.
+
+  - key: covertype_uci
+    config: ../datasets/covertype_uci.yaml
+    fetch_command: python3 scripts/fetch_covertype.py
+    loop_steps: 2
+    autogluon_time_limit: 60
+    notes:
+      - Larger multiclass land-cover benchmark outside the business domain.
+      - Uses fewer bounded loop steps and a capped external AutoGluon budget to keep local runs practical.

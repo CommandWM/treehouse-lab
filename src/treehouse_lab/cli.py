@@ -4,6 +4,7 @@ import argparse
 import json
 from pathlib import Path
 
+from treehouse_lab.benchmark_suite import run_benchmark_suite
 from treehouse_lab.comparison import run_comparison_suite
 from treehouse_lab.exporting import export_model_artifact
 from treehouse_lab.loop import AutonomousLoopController
@@ -64,6 +65,12 @@ def build_parser() -> argparse.ArgumentParser:
         help="Optional AutoGluon presets override. Use a comma-separated list such as good_quality,optimize_for_deployment.",
     )
     compare_parser.add_argument("--autogluon-time-limit", type=int, default=None, help="Optional AutoGluon time limit in seconds.")
+
+    suite_parser = subparsers.add_parser("benchmark-suite", help="Run a fixed benchmark suite through the comparison harness.")
+    suite_parser.add_argument("suite_config", type=Path, help="Path to the benchmark suite YAML.")
+    suite_parser.add_argument("--output-dir", type=Path, default=None, help="Optional destination directory for suite outputs.")
+    suite_parser.add_argument("--skip-autogluon", action="store_true", help="Skip optional AutoGluon runners for every dataset.")
+    suite_parser.add_argument("--llm-summary", action="store_true", help="Ask the configured LLM to synthesize each dataset comparison.")
 
     return parser
 
@@ -130,6 +137,13 @@ def main() -> None:
             autogluon_profile=args.autogluon_profile,
             autogluon_presets=args.autogluon_presets,
             autogluon_time_limit=args.autogluon_time_limit,
+        )
+    elif args.command == "benchmark-suite":
+        result = run_benchmark_suite(
+            args.suite_config,
+            output_dir=args.output_dir,
+            include_autogluon=not args.skip_autogluon,
+            include_llm_summary=args.llm_summary,
         )
     else:
         controller = AutonomousLoopController(args.config)
