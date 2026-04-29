@@ -1,0 +1,44 @@
+dataset:
+  source:
+    kind: csv
+    name: UCI Adult
+    path: custom_datasets/adult.csv
+    target_column: income
+  split:
+    validation_size: 0.2
+    test_size: 0.2
+    stratify: true
+
+benchmark:
+  pack: optional
+  profile: external_probe
+  objective: Use a widely recognized mixed-type public census dataset to test whether the bounded XGBoost-first loop stays practical beyond business demos without turning leaderboard chasing into the center of the project.
+
+evaluation_policy:
+  minimum_primary_metric: 0.88
+  max_train_validation_gap: 0.06
+  max_validation_test_gap: 0.05
+  max_runtime_seconds: 180
+  max_feature_count: 160
+  require_promotion_for_readiness: true
+
+experiment:
+  name: adult-uci-baseline
+  description: Public census-income benchmark using the UCI Adult dataset, normalized into one CSV while keeping Treehouse Lab in charge of the split policy.
+  primary_metric: roc_auc
+  promote_if_delta_at_least: 0.003
+  max_runtime_minutes: 20
+  seed: 42
+  baseline_hypothesis: A disciplined XGBoost baseline should establish a credible incumbent on a classic mixed-type public classification benchmark before broader external comparisons are added.
+
+model:
+  params:
+    n_estimators: 320
+    max_depth: 6
+    learning_rate: 0.05
+    min_child_weight: 2
+    subsample: 0.9
+    colsample_bytree: 0.8
+
+task:
+  kind: binary_classification

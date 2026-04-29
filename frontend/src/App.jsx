@@ -1188,6 +1188,31 @@ function renderActiveView(context) {
 
     return (
       <section className="panel-stack">
+        <section className="panel">
+          <div className="panel-header">
+            <div>
+              <div className="section-label">Outcome Gates</div>
+              <h3>Keep benchmark progress separate from implementation readiness</h3>
+            </div>
+          </div>
+          <div className="assessment-grid">
+            <AssessmentStatusCard
+              kind="benchmark"
+              value={incumbent?.assessment?.benchmark_status ?? "none"}
+              copy={incumbent?.assessment?.benchmark_summary ?? "No benchmark decision exists yet for this config."}
+            />
+            <AssessmentStatusCard
+              kind="readiness"
+              value={incumbent?.assessment?.implementation_readiness ?? "not_started"}
+              copy={buildImplementationReadinessCopy(incumbent?.assessment)}
+            />
+          </div>
+          <p className="detail-copy">
+            A run can be useful benchmark progress without being implementation-ready, and it can be
+            implementation-ready in isolation without earning promotion over the incumbent.
+          </p>
+        </section>
+
         <div className="state-grid">
           <section className="panel">
             <div className="section-label">Diagnosis</div>
@@ -1376,7 +1401,11 @@ function renderActiveView(context) {
                 <div className="run-card__title">{entry.name}</div>
                 <div className="run-card__meta">
                   <span>{Number(entry.metric ?? 0).toFixed(4)}</span>
-                  <span>{entry.assessment?.benchmark_status ?? "n/a"}</span>
+                  <span>{entry.diagnosis?.primary_tag ?? "n/a"}</span>
+                </div>
+                <div className="status-pill-row">
+                  <StatusPill kind="benchmark" value={entry.assessment?.benchmark_status ?? "n/a"} />
+                  <StatusPill kind="readiness" value={entry.assessment?.implementation_readiness ?? "n/a"} />
                 </div>
                 <div className="run-card__copy">
                   {entry.diagnosis?.summary ?? entry.decision_reason ?? "No summary available."}
@@ -1391,12 +1420,24 @@ function renderActiveView(context) {
           {activeRun ? (
             <>
               <h3>{activeRun.name}</h3>
+              <div className="assessment-grid assessment-grid--compact">
+                <AssessmentStatusCard
+                  kind="benchmark"
+                  value={activeRun.assessment?.benchmark_status ?? "n/a"}
+                  copy={activeRun.assessment?.benchmark_summary ?? "No benchmark summary available for this run."}
+                />
+                <AssessmentStatusCard
+                  kind="readiness"
+                  value={activeRun.assessment?.implementation_readiness ?? "n/a"}
+                  copy={buildImplementationReadinessCopy(activeRun.assessment)}
+                />
+              </div>
               <div className="signal-grid signal-grid--compact signal-grid--inspector">
-              <SignalCard label="Metric" value={Number(activeRun.metric ?? 0).toFixed(4)} copy="Validation primary metric." />
-              <SignalCard label="Decision" value={activeRun.promoted ? "promote" : "reject"} copy={activeRun.decision_reason} />
-              <SignalCard label="Diagnosis" value={activeRun.diagnosis?.primary_tag ?? "n/a"} copy="Primary diagnosis tag." />
-              <SignalCard label="Readiness" value={activeRun.assessment?.implementation_readiness ?? "n/a"} copy="Current implementation-readiness label." />
-            </div>
+                <SignalCard label="Metric" value={Number(activeRun.metric ?? 0).toFixed(4)} copy="Validation primary metric." />
+                <SignalCard label="Decision" value={activeRun.promoted ? "promote" : "reject"} copy={activeRun.decision_reason} />
+                <SignalCard label="Diagnosis" value={activeRun.diagnosis?.primary_tag ?? "n/a"} copy="Primary diagnosis tag." />
+                <SignalCard label="Checks Passed" value={countPassedChecks(activeRun.assessment)} copy="Policy checks passed for this run." />
+              </div>
               <ProposalExecutionCard proposal={activeRun.proposal ?? runDetail?.artifacts?.proposal ?? null} />
               {activeRun.feature_generation?.enabled || runDetail?.artifacts?.feature_generation?.enabled ? (
                 <details className="detail-box" open>
@@ -1467,6 +1508,27 @@ function SignalCard({ label, value, copy }) {
       <div className="signal-value">{value}</div>
       <div className="signal-copy">{copy}</div>
     </article>
+  );
+}
+
+function AssessmentStatusCard({ kind, value, copy }) {
+  return (
+    <article className={`assessment-card assessment-card--${statusTone(kind, value)}`}>
+      <div className="signal-label">{kind === "benchmark" ? "Benchmark Decision" : "Implementation Decision"}</div>
+      <div className="assessment-card__row">
+        <div className="assessment-card__value">{formatAssessmentValue(value)}</div>
+        <StatusPill kind={kind} value={value} />
+      </div>
+      <div className="signal-copy">{copy}</div>
+    </article>
+  );
+}
+
+function StatusPill({ kind, value }) {
+  return (
+    <span className={`status-pill status-pill--${statusTone(kind, value)}`}>
+      {kind}: {formatAssessmentValue(value)}
+    </span>
   );
 }
 
@@ -1655,6 +1717,53 @@ function buildHeroCopy(activeView, hasSelectedDataset) {
 
 function hasFeatureGeneration(proposal) {
   return Boolean(proposal?.feature_generation?.enabled);
+}
+
+function formatAssessmentValue(value) {
+  const normalized = String(value ?? "n/a")
+    .replaceAll("_", " ")
+    .trim();
+  if (!normalized) {
+    return "n/a";
+  }
+  return normalized;
+}
+
+function buildImplementationReadinessCopy(assessment) {
+  if (!assessment) {
+    return "No readiness decision exists yet for this config.";
+  }
+  const failedCheck = (assessment.checks ?? []).find((check) => !check.passed);
+  if (failedCheck) {
+    return failedCheck.detail;
+  }
+  return "All configured readiness checks passed for the current best run.";
+}
+
+function countPassedChecks(assessment) {
+  const checks = assessment?.checks ?? [];
+  const passed = checks.filter((check) => check.passed).length;
+  return checks.length > 0 ? `${passed}/${checks.length}` : "0/0";
+}
+
+function statusTone(kind, value) {
+  const normalized = String(value ?? "").toLowerCase();
+  if (kind === "readiness") {
+    if (normalized.includes("implementation_ready")) {
+      return "positive";
+    }
+    if (normalized.includes("needs_more_work") || normalized.includes("not_started")) {
+      return "caution";
+    }
+    return "neutral";
+  }
+  if (normalized.includes("not_better") || normalized.includes("regressed") || normalized.includes("none")) {
+    return "caution";
+  }
+  if (normalized.includes("baseline_established") || normalized.includes("better_than_incumbent") || normalized.includes("promoted")) {
+    return "positive";
+  }
+  return "neutral";
 }
 
 

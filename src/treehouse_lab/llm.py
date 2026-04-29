@@ -9,7 +9,7 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
 
-from treehouse_lab.runtime_settings import load_llm_settings
+from treehouse_lab.runtime_settings import effective_llm_settings, load_llm_settings
 
 try:
     import requests
@@ -23,6 +23,7 @@ except ImportError:  # pragma: no cover - optional at runtime
 
 DEFAULT_ADVISOR_PROVIDER = "ollama"
 DEFAULT_ADVISOR_QUESTION = "What should I do next and why?"
+DEFAULT_COMPARISON_QUESTION = "Where does Treehouse Lab add value beyond AutoGluon and plain baselines, and what should we do next?"
 DEFAULT_OLLAMA_MODEL = "gemma3:4b"
 DEFAULT_OLLAMA_BASE_URL = "http://localhost:11434"
 OLLAMA_API_KEY_ENV_VARS = ("OLLAMA_API_KEY", "OLLAMA_CLOUD_KEY", "VIOLAAMA_CLOUD_KEY")
@@ -50,6 +51,19 @@ class AdvisorResponse:
     message: str | None = None
     grounding: dict[str, Any] = field(default_factory=dict)
     recommended_proposal: dict[str, Any] | None = None
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass(slots=True)
+class ComparisonSummaryResponse:
+    status: str
+    provider: str
+    model: str | None
+    question: str
+    answer: str | None = None
+    message: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -90,11 +104,33 @@ def generate_research_advice(context: dict[str, Any], question: str | None = Non
     )
 
 
+def generate_comparison_summary(
+    context: dict[str, Any],
+    question: str | None = None,
+) -> ComparisonSummaryResponse:
+    question_text = (question or DEFAULT_COMPARISON_QUESTION).strip() or DEFAULT_COMPARISON_QUESTION
+    result = _generate_text(
+        system_prompt=_comparison_summary_system_prompt(),
+        user_prompt=_comparison_summary_user_prompt(context, question_text),
+        context=context,
+        purpose="comparison synthesis",
+    )
+    return ComparisonSummaryResponse(
+        status=result.status,
+        provider=result.provider,
+        model=result.model,
+        question=question_text,
+        answer=result.text if result.status == "available" else None,
+        message=result.message,
+    )
+
+
 def llm_loop_selection_enabled(project_root: str | Path | None = None) -> bool:
     if project_root is None:
         project_root = Path.cwd()
     project_root = Path(project_root)
-    setting = load_llm_settings(project_root).get("loop_llm_selection", False)
+    settings = effective_llm_settings(project_root, {"loop_llm_selection": False})
+    setting = settings.get("loop_llm_selection", False)
     if isinstance(setting, bool):
         return setting
     return _truthy(str(setting))
@@ -516,6 +552,25 @@ def _proposal_selection_system_prompt() -> str:
     )
 
 
+def _comparison_summary_system_prompt() -> str:
+    return (
+        "You are summarizing a Treehouse Lab side-by-side comparison.\n"
+        "Explain the outcome using only the supplied comparison context.\n"
+        "Rules:\n"
+        "- Separate metric results from product-operating advantages like artifacts, journals, bounded next steps, and guided reasoning.\n"
+        "- If AutoGluon is present, explain what Treehouse adds beyond one-shot AutoML, especially around bounded next-step choice and LLM-guided iteration.\n"
+        "- Never claim a metric win when the metrics are tied or worse.\n"
+        "- If an external benchmark is unavailable, say that plainly instead of guessing.\n"
+        "- Do not recommend widening the learner surface beyond the supplied runners.\n"
+        "- Keep the answer concise and auditable.\n"
+        "- Use exactly these sections and labels:\n"
+        "Current state:\n"
+        "Product value:\n"
+        "Next step:\n"
+        "Watchouts:"
+    )
+
+
 def _user_prompt(context: dict[str, Any], question: str) -> str:
     return f"Question: {question}\n\nContext JSON:\n{json.dumps(context, indent=2, sort_keys=True)}"
 
@@ -530,6 +585,10 @@ def _proposal_selection_user_prompt(context: dict[str, Any], candidates: list[di
         "candidates": candidates,
     }
     return f"Select the next bounded proposal.\n\nCandidate Context JSON:\n{json.dumps(payload, indent=2, sort_keys=True)}"
+
+
+def _comparison_summary_user_prompt(context: dict[str, Any], question: str) -> str:
+    return f"Question: {question}\n\nComparison Context JSON:\n{json.dumps(context, indent=2, sort_keys=True)}"
 
 
 def _build_grounding(context: dict[str, Any]) -> dict[str, Any]:

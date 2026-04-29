@@ -46,6 +46,58 @@ Treehouse Lab needs both stages:
 1. prove improvement discipline
 2. prove implementation plausibility
 
+## Common Outcomes
+
+The easiest way to read a run is to treat the two decisions as separate gates:
+
+### 1. Benchmark Better + Implementation Ready
+
+This is the clean win.
+
+Interpretation:
+
+- the run beat the incumbent enough to justify promotion
+- it also stayed inside the configured readiness limits
+
+This is the closest thing Treehouse Lab has to "ship the new incumbent."
+
+### 2. Benchmark Better + Not Implementation Ready
+
+This is progress, but not a clean handoff candidate.
+
+Interpretation:
+
+- the run improved validation enough to matter
+- but the readiness checks say it still needs work
+
+Typical reasons:
+
+- overfit gap widened too far
+- validation and test behavior diverged
+- runtime or feature budget was exceeded
+
+### 3. Not Benchmark Better + Implementation Ready
+
+This is a stable run that still did not earn promotion.
+
+Interpretation:
+
+- the run may be sensible in isolation
+- but it did not improve the incumbent enough to justify replacement
+
+This is a useful reminder that "clean" and "worth promoting" are not the same decision.
+
+### 4. Not Benchmark Better + Not Implementation Ready
+
+This is a reject.
+
+Interpretation:
+
+- the run did not help the benchmark story
+- and it also failed the readiness bar
+
+This is exactly the kind of dead-end that should be visible in the journal so the loop avoids pretending it made progress.
+
 ## Config Shape
 
 Each dataset config can declare:

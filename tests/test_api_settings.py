@@ -86,6 +86,7 @@ def client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> TestClient:
     monkeypatch.setattr(api, "GLOSSARY_PATH", glossary_path)
     monkeypatch.delenv("TREEHOUSE_LAB_LLM_PROVIDER", raising=False)
     monkeypatch.delenv("TREEHOUSE_LAB_LLM_MODEL", raising=False)
+    monkeypatch.delenv("TREEHOUSE_LAB_LOOP_LLM_SELECTION", raising=False)
     monkeypatch.delenv("TREEHOUSE_LAB_OLLAMA_BASE_URL", raising=False)
     monkeypatch.delenv("OLLAMA_API_KEY", raising=False)
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
@@ -182,3 +183,11 @@ def test_llm_settings_reads_ollama_cloud_key_alias_from_environment(
     payload = response.json()
     assert payload["ollama_base_url"] == "https://ollama.com"
     assert payload["ollama_api_key"] == "alias-key"
+
+
+def test_loop_llm_selection_reads_from_environment(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("TREEHOUSE_LAB_LOOP_LLM_SELECTION", "true")
+    assert llm.llm_loop_selection_enabled(tmp_path) is True
+
+    monkeypatch.setenv("TREEHOUSE_LAB_LOOP_LLM_SELECTION", "false")
+    assert llm.llm_loop_selection_enabled(tmp_path) is False

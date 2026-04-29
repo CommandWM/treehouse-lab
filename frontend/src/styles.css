@@ -428,6 +428,7 @@ select {
 
 .flow-card,
 .signal-card,
+.assessment-card,
 .note-card,
 .detail-box,
 .glossary-item {
@@ -481,6 +482,52 @@ select {
 .signal-card {
   padding: 0.95rem;
   min-width: 0;
+}
+
+.assessment-grid {
+  margin-top: 0.25rem;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.8rem;
+}
+
+.assessment-grid--compact {
+  margin-bottom: 1rem;
+}
+
+.assessment-card {
+  padding: 0.95rem;
+  min-width: 0;
+}
+
+.assessment-card__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.45rem;
+}
+
+.assessment-card__value {
+  font-weight: 800;
+  font-size: 1.02rem;
+  line-height: 1.15;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.assessment-card--positive {
+  background: color-mix(in srgb, var(--accent-soft) 62%, var(--panel));
+  border-color: color-mix(in srgb, var(--accent) 36%, var(--line));
+}
+
+.assessment-card--caution {
+  background: color-mix(in srgb, rgba(178, 139, 65, 0.18) 82%, var(--panel));
+  border-color: color-mix(in srgb, var(--gold) 34%, var(--line));
+}
+
+.assessment-card--neutral {
+  background: color-mix(in srgb, var(--panel) 92%, transparent);
 }
 
 .signal-value {
@@ -582,6 +629,35 @@ select {
   display: flex;
   flex-wrap: wrap;
   gap: 0.55rem;
+}
+
+.status-pill-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  margin-bottom: 0.55rem;
+}
+
+.status-pill {
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  padding: 0.28rem 0.65rem;
+  font-size: 0.78rem;
+  background: color-mix(in srgb, var(--panel) 88%, transparent);
+}
+
+.status-pill--positive {
+  background: color-mix(in srgb, var(--accent-soft) 70%, var(--panel));
+  border-color: color-mix(in srgb, var(--accent) 36%, var(--line));
+}
+
+.status-pill--caution {
+  background: color-mix(in srgb, rgba(178, 139, 65, 0.22) 88%, var(--panel));
+  border-color: color-mix(in srgb, var(--gold) 36%, var(--line));
+}
+
+.status-pill--neutral {
+  background: color-mix(in srgb, var(--panel) 88%, transparent);
 }
 
 .step-control,
@@ -742,6 +818,7 @@ select {
 
   .hero,
   .intake-grid,
+  .assessment-grid,
   .flow-grid,
   .signal-grid,
   .state-grid,

@@ -8,6 +8,8 @@ The benchmark pack is therefore organized around three questions:
 - `stress`: does it stay sane on messy tabular data?
 - `implementation_like`: does it produce a model you could plausibly carry toward production?
 
+The benchmark pack is the repo's internal proving ground. It is not meant to become a giant leaderboard suite.
+
 ## Included benchmarks
 
 ### Smoke
@@ -87,3 +89,49 @@ It is appropriate for questions like:
 - does our loop generalize beyond bundled examples?
 
 It is not the center of the project. The center is a disciplined benchmark-and-implementation loop.
+
+## Public probes
+
+The current public-dataset additions are meant to widen domain coverage without changing the core loop:
+
+- `configs/datasets/bank_marketing_uci.yaml`: mixed-type imbalanced binary business classification
+- `configs/datasets/adult_uci.yaml`: mixed-type binary census-income classification with missing values
+- `configs/datasets/covertype_uci.yaml`: large multiclass land-cover classification outside the business domain
+
+Recommended fetch/setup:
+
+```bash
+python3 scripts/fetch_bank_marketing.py
+python3 scripts/fetch_adult.py
+python3 scripts/fetch_covertype.py
+```
+
+## 2.0 benchmark direction
+
+For `2.0`, the benchmark story should widen in one specific way: external comparison without turning the repo into a model zoo.
+
+The recommended shape is:
+
+- keep the current smoke / stress / implementation-like pack as the internal regression contract
+- add a small public comparison suite with fixed seeds, split policy, and runtime budgets
+- compare:
+  - plain XGBoost baseline
+  - Treehouse Lab baseline
+  - Treehouse Lab bounded loop
+  - FLAML
+  - AutoGluon
+- report:
+  - primary metric
+  - runtime
+  - artifact quality
+  - auditability / reviewability
+
+The goal is not to win every benchmark. The goal is to explain when Treehouse Lab is the right tool:
+
+- when a team wants disciplined bounded search instead of opaque automation
+- when promotion logic and run narratives matter
+- when exported artifacts and reviewable decisions are more important than squeezing out every last benchmark point
+
+Explicit non-goal for `2.0`:
+
+- broadening into CatBoost, LightGBM, and a larger learner matrix before the XGBoost-first loop has earned its position

@@ -11,7 +11,7 @@
 
 Treehouse Lab is a Karpathy-style autoresearch loop for tabular machine learning.
 
-Current checkpoint: `v1.0.1`. The repo now has a real end-to-end local workflow: dataset-first intake, bounded autoresearch loops, grounded LLM assistance, coach-triggered bounded execution, local settings for provider credentials, exportable model artifacts with optional container packaging, explicit binary or multiclass classification support for XGBoost-first experiments, and a capped train-only feature-generation branch for plateaued loops.
+Current checkpoint: `v1.1.0`. The repo now has a real end-to-end local workflow: dataset-first intake, bounded autoresearch loops, grounded LLM assistance, coach-triggered bounded execution, local settings for provider credentials, exportable model artifacts with optional container packaging, explicit binary or multiclass classification support for XGBoost-first experiments, and a capped train-only feature-generation branch for plateaued loops.
 
 The idea is simple: give an agent a constrained playground around XGBoost-style models, let it propose experiments, run them safely, keep only the winners, and leave behind a readable research log instead of a pile of notebook debris.
 
@@ -59,11 +59,11 @@ Version 1 is intentionally narrow:
 - single-table tabular datasets
 - XGBoost as the primary learner
 - Optuna for hyperparameter search
-- OpenFE for optional feature generation
+- bounded train-only feature generation, with optional broader feature tooling later
 - MLflow for experiment tracking
 - local, offline evaluation only
 
-Later versions can add LightGBM, CatBoost, time series, richer feature stores, and scheduled retraining.
+Later work should deepen the XGBoost-first loop with stronger benchmarks, richer public datasets, and better auditability before the repo expands into additional learners.
 
 ## Core loop
 
@@ -84,17 +84,17 @@ This repository now includes a real runnable slice:
 - a deterministic autonomous loop with proposal selection and narratives
 - local artifact bundles and an incumbent registry under `runs/`
 - loop summaries under `runs/loops/`
-- a Streamlit demo UI in `app.py`
+- a FastAPI + React workbench for intake, current state, journal inspection, settings, and architecture
 - benchmark-pack configs for smoke, stress, and implementation-like evaluation
 
 This is now the `v1` slice. You can establish incumbents, inspect the next bounded proposal, run a short autonomous loop, use the research coach, execute bounded coach recommendations, and export a trained model as a reusable handoff package.
 
 ## Quickstart
 
-Install the package and the Streamlit UI extra:
+Install the package and the local web UI dependencies:
 
 ```bash
-pip install -e '.[ui]'
+pip install -e '.[web]'
 ```
 
 Run a baseline:
@@ -124,24 +124,40 @@ Run the bounded autonomous loop:
 treehouse-lab loop configs/datasets/churn_demo.yaml --steps 3
 ```
 
+Run the external comparison harness:
+
+```bash
+python3 scripts/fetch_bank_marketing.py
+python3 scripts/fetch_adult.py
+python3 scripts/fetch_covertype.py
+./scripts/setup_benchmark_env.sh
+TREEHOUSE_LAB_LLM_PROVIDER=agent_cli \
+TREEHOUSE_LAB_AGENT_CLI=codex \
+TREEHOUSE_LAB_LLM_MODEL=gpt-5.4-mini \
+TREEHOUSE_LAB_LOOP_LLM_SELECTION=true \
+.venv-benchmarks/bin/python -m treehouse_lab.cli compare \
+  configs/datasets/bank_marketing_uci.yaml \
+  --loop-steps 3 \
+  --autogluon-profile practical \
+  --llm-summary
+```
+
+Run the new public dataset probes directly:
+
+```bash
+treehouse-lab baseline configs/datasets/adult_uci.yaml
+treehouse-lab baseline configs/datasets/covertype_uci.yaml
+```
+
 Benchmark-pack loop check:
 
 ```bash
 treehouse-lab loop configs/datasets/implementation_churn.yaml --steps 3
 ```
 
-Run the legacy Streamlit demo interface:
+Run the API for the local workbench:
 
 ```bash
-streamlit run app.py
-```
-
-The Streamlit surface is now meant to teach the loop as well as operate it: a guided blueprint view, current diagnosis/proposal summary, and an in-app glossary mirror the underlying run artifacts.
-
-Run the React UI instead:
-
-```bash
-pip install -e '.[web]'
 treehouse-lab-api
 ```
 
@@ -153,7 +169,7 @@ npm install
 npm run dev
 ```
 
-The React UI is the preferred path for the richer guided interface. Streamlit can remain as a lightweight fallback while the React surface evolves.
+The React UI is the primary path for the guided local interface.
 
 To enable the optional grounded research coach in the Current State view:
 
@@ -256,9 +272,14 @@ Treehouse Lab currently exposes four core commands:
 - `treehouse-lab propose <config>`: inspect the next deterministic proposal without executing it
 - `treehouse-lab diagnose <config>`: inspect the current diagnosis plus the next bounded proposal
 - `treehouse-lab loop <config> --steps N`: run a short autonomous research cycle with promote/reject decisions and narratives
+- `treehouse-lab compare <config>`: run a side-by-side comparison harness across plain XGBoost, Treehouse Lab, and optional external AutoML runners
+  Use `--llm-summary` to ask the configured provider to synthesize where Treehouse Lab adds product value beyond raw metric comparison.
+  The default AutoGluon mode is `--autogluon-profile practical`, which keeps the benchmark rerunnable instead of turning it into a long opaque sweep.
 - `treehouse-lab export <config>`: package the incumbent as a reusable model artifact with optional scoring and container wrappers
 
 The important distinction is that `diagnose`, `propose`, and `loop` do not freestyle. They operate inside explicit mutation templates and the declared search space in `configs/search_space.yaml`.
+
+`compare` is intentionally separate from the core loop. It uses the same dataset config and split policy, but it exists to benchmark Treehouse Lab against external baselines such as plain XGBoost and optional AutoGluon rather than to widen the product's core learner surface.
 
 ## Exporting a model
 
@@ -321,10 +342,16 @@ Examples are bundled so the repo is usable offline:
 - `smoke_breast_cancer.yaml`: a clean benchmark-pack smoke test
 - `stress_churn.yaml`: a messier benchmark-pack stress test
 - `implementation_churn.yaml`: a benchmark-pack implementation-like test
+- `bank_marketing_uci.yaml`: an optional public UCI business-style probe for external comparison
+- `adult_uci.yaml`: an optional public mixed-type census-income probe
+- `covertype_uci.yaml`: an optional public multiclass scale probe outside the business domain
 
 This keeps the onboarding path self-contained while the benchmark pack evolves.
 
 The benchmark pack is documented in [docs/benchmarks.md](docs/benchmarks.md), the readiness criteria are documented in [docs/evaluation-policy.md](docs/evaluation-policy.md), and the core terms are collected in [docs/glossary.md](docs/glossary.md).
+
+If you want the shortest user-facing path through the current product, start with [docs/walkthrough.md](docs/walkthrough.md).
+If you want to see what the product actually emits before running it yourself, read [docs/sample-outputs.md](docs/sample-outputs.md).
 
 ## UI Architecture
 
@@ -340,6 +367,27 @@ The React UI is a separate presentation layer:
 - a Vite React client in `frontend/`
 
 That split is deliberate. It keeps the Python loop stable while making the teaching surface easier to control and extend.
+
+## Near-term roadmap
+
+The next useful work is not a broad rewrite. It is disciplined tightening around the current `v1.1` loop:
+
+- make feature-generation decisions easier to audit and compare across runs
+- keep improving the guided React workbench so the dataset-first path is obvious to a new user
+- expand the benchmark pack and test against more real local datasets
+- improve shareability with cleaner walkthroughs, screenshots, and sample research trails
+- evaluate a broader feature stage later without relaxing leakage guardrails or bounded mutation policy
+
+## 2.0 direction
+
+Version `2.0` should not be a model-zoo release. The stronger direction is:
+
+- stay XGBoost-first and bounded rather than rushing into CatBoost, LightGBM, or a broader learner matrix
+- benchmark Treehouse Lab honestly against plain XGBoost, FLAML, and AutoGluon on a small public dataset suite
+- use those comparisons to explain where Treehouse Lab is better: auditability, promotion policy, artifact quality, and human-readable research flow
+- keep the public demo and benchmark story tight enough that a new user can understand the product quickly
+
+See [docs/roadmap.md](docs/roadmap.md) for the integrated roadmap and how the current GitHub roadmap issues map onto the shipped `v1.1` state.
 
 ## How the loop works
 
@@ -379,6 +427,7 @@ Treehouse Lab is not trying to reimplement the whole ecosystem. It should stand 
 
 - [XGBoost](https://github.com/dmlc/xgboost)
 - [Optuna](https://optuna.org/)
+- [FLAML](https://github.com/microsoft/FLAML)
 - [OpenFE](https://github.com/IIIS-Li-Group/OpenFE)
 - [MLflow](https://mlflow.org/)
 - [Featuretools](https://docs.featuretools.com/en/stable/)
@@ -399,8 +448,7 @@ That is the product.
 
 ## MVP milestones
 
-See [docs/mvp.md](docs/mvp.md) for the build plan.
-See [docs/autonomous-loop.md](docs/autonomous-loop.md) for the next implementation phase.
+See [docs/mvp.md](docs/mvp.md) for the build plan and remaining shareability work.
 
 ## Working through a cycle
 
@@ -411,6 +459,11 @@ The cleanest way to think about Treehouse Lab right now is:
 - inspect or run the next bounded proposal
 - review whether the run was promoted or rejected
 - read the resulting narrative instead of reverse-engineering raw metrics
+
+Two decisions should always stay separate in that review:
+
+- `benchmark better`: did this run actually beat the incumbent enough to matter?
+- `implementation ready`: did it also stay inside the configured runtime, overfit, holdout, and feature-budget limits?
 
 For now, that is the right level of interaction. The repo is aimed at tightening the research loop first, then layering on richer UI and eventual serving or system integration later.
 

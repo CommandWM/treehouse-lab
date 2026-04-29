@@ -4,6 +4,7 @@ import argparse
 import json
 from pathlib import Path
 
+from treehouse_lab.comparison import run_comparison_suite
 from treehouse_lab.exporting import export_model_artifact
 from treehouse_lab.loop import AutonomousLoopController
 from treehouse_lab.runner import TreehouseLabRunner
@@ -43,6 +44,26 @@ def build_parser() -> argparse.ArgumentParser:
     export_parser.add_argument("config", type=Path, help="Path to the dataset config YAML.")
     export_parser.add_argument("--run-id", default="", help="Optional run id to export instead of the current incumbent.")
     export_parser.add_argument("--output-dir", type=Path, default=None, help="Optional destination directory for the exported bundle.")
+
+    compare_parser = subparsers.add_parser("compare", help="Run a side-by-side comparison harness for a dataset config.")
+    compare_parser.add_argument("config", type=Path, help="Path to the dataset config YAML.")
+    compare_parser.add_argument("--loop-steps", type=int, default=3, help="How many bounded Treehouse loop steps to run in the isolated comparison workspace.")
+    compare_parser.add_argument("--output-dir", type=Path, default=None, help="Optional destination directory for comparison outputs.")
+    compare_parser.add_argument("--skip-autogluon", action="store_true", help="Skip the optional AutoGluon runner.")
+    compare_parser.add_argument("--llm-summary", action="store_true", help="Ask the configured LLM to synthesize the comparison report.")
+    compare_parser.add_argument("--llm-question", default=None, help="Optional question for the comparison synthesis step.")
+    compare_parser.add_argument(
+        "--autogluon-profile",
+        default="practical",
+        choices=["practical", "full"],
+        help="AutoGluon benchmark profile. `practical` is faster and deployment-oriented; `full` is a heavier reference run.",
+    )
+    compare_parser.add_argument(
+        "--autogluon-presets",
+        default=None,
+        help="Optional AutoGluon presets override. Use a comma-separated list such as good_quality,optimize_for_deployment.",
+    )
+    compare_parser.add_argument("--autogluon-time-limit", type=int, default=None, help="Optional AutoGluon time limit in seconds.")
 
     return parser
 
@@ -97,6 +118,18 @@ def main() -> None:
             config_key=config_key,
             run_id=args.run_id or None,
             output_dir=args.output_dir,
+        )
+    elif args.command == "compare":
+        result = run_comparison_suite(
+            args.config,
+            output_dir=args.output_dir,
+            loop_steps=args.loop_steps,
+            include_autogluon=not args.skip_autogluon,
+            include_llm_summary=args.llm_summary,
+            llm_question=args.llm_question,
+            autogluon_profile=args.autogluon_profile,
+            autogluon_presets=args.autogluon_presets,
+            autogluon_time_limit=args.autogluon_time_limit,
         )
     else:
         controller = AutonomousLoopController(args.config)
