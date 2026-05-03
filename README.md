@@ -358,7 +358,7 @@ Examples are bundled so the repo is usable offline:
 
 This keeps the onboarding path self-contained while the benchmark pack evolves.
 
-The benchmark pack is documented in [docs/benchmarks.md](docs/benchmarks.md), the readiness criteria are documented in [docs/evaluation-policy.md](docs/evaluation-policy.md), and the core terms are collected in [docs/glossary.md](docs/glossary.md).
+The benchmark pack is documented in [docs/benchmarks.md](docs/benchmarks.md), the decision-facing benchmark report guide is in [docs/benchmark-report.md](docs/benchmark-report.md), the readiness criteria are documented in [docs/evaluation-policy.md](docs/evaluation-policy.md), and the core terms are collected in [docs/glossary.md](docs/glossary.md).
 
 If you want the shortest user-facing path through the current product, start with [docs/walkthrough.md](docs/walkthrough.md).
 If you want to see what the product actually emits before running it yourself, read [docs/sample-outputs.md](docs/sample-outputs.md).
@@ -396,6 +396,8 @@ Version `2.0` should not be a model-zoo release. The stronger direction is:
 - benchmark Treehouse Lab honestly against plain XGBoost, FLAML, and AutoGluon on a small public dataset suite
 - use those comparisons to explain where Treehouse Lab is better: auditability, promotion policy, artifact quality, and human-readable research flow
 - keep the public demo and benchmark story tight enough that a new user can understand the product quickly
+
+See [docs/benchmark-report.md](docs/benchmark-report.md) for the product-facing interpretation layer: when to use Treehouse Lab, when to prefer plain XGBoost or AutoML, and what evidence must be present before a result is publishable.
 
 See [docs/roadmap.md](docs/roadmap.md) for the integrated roadmap and how the current GitHub roadmap issues map onto the shipped `v1.1` state.
 

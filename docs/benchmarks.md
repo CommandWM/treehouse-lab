@@ -135,6 +135,8 @@ The suite keeps the public benchmark story small and fixed:
 
 The suite compares plain XGBoost, Treehouse baseline, Treehouse bounded loop, practical AutoGluon, and budgeted FLAML when the optional benchmark environment is installed. Missing optional runners are reported as unavailable instead of crashing the suite.
 
+The decision-facing companion is [Benchmark Report](benchmark-report.md). Use it when you need to explain what the suite means, when Treehouse Lab is the right tool, and when plain XGBoost, FLAML, or AutoGluon is a better fit.
+
 When `TREEHOUSE_LAB_LOOP_LLM_SELECTION=true`, the Treehouse loop still generates candidates deterministically first. The compare output now records the deterministic top-ranked proposal beside the LLM-selected proposal, then reports whether the LLM changed the next step or mutation family. Treat that as exploration evidence, not an automatic metric claim:
 
 - metric value: did the selected run beat the incumbent and clear readiness gates?
