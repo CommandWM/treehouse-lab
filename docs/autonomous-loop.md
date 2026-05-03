@@ -62,6 +62,7 @@ Suggested fields for `ExperimentProposal`:
 - `feature_generation`
 - `depends_on_run_id`
 - `stage`
+- `grounding`
 
 Key functions:
 
@@ -99,6 +100,7 @@ Rules:
 - every template must map to explicit parameter edits
 - templates must respect `configs/search_space.yaml`
 - a template can be skipped if its preconditions are not met
+- every generated proposal should include bounded local grounding with the measured evidence and repo references used to justify the mutation
 
 ### `loop.py`
 
@@ -208,6 +210,8 @@ Signals the scorer can use:
 - incumbent plateau
 - recent rejection streak
 - previous template family outcomes
+
+If a mutation family has repeated recent non-promoting attempts below the promotion threshold, the loop applies a weak-cycle guard before execution. The guard blocks that repeated family for the current choice and selects the first different bounded candidate when one is available. The selected proposal records a `cycle_guard` payload so the journal and comparison report show which family was blocked, which fallback ran, and why.
 
 ## First 3-Step Autonomous Loop
 

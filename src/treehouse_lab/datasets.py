@@ -234,6 +234,17 @@ def normalize_classification_target(
         msg = f"Target column '{column_name}' must contain at least 2 distinct labels for classification."
         raise ValueError(msg)
 
+    normalized_task_kind = task_kind.strip().casefold()
+    if normalized_task_kind in {"auto", "multiclass_classification"} and _looks_continuous_numeric_target(
+        series,
+        unique_values,
+    ):
+        msg = (
+            f"Target column '{column_name}' looks continuous/regression-like. "
+            "Treehouse Lab currently supports binary and multiclass classification targets only."
+        )
+        raise ValueError(msg)
+
     resolved_task_kind = _resolve_task_kind(task_kind, unique_values, column_name)
     if resolved_task_kind == "binary_classification":
         mapping, mapping_mode = _build_binary_label_mapping(unique_values)
@@ -408,6 +419,19 @@ def _resolve_task_kind(task_kind: str, unique_values: list[object], column_name:
         return normalized_task_kind
     msg = f"Unsupported task kind: {task_kind}"
     raise ValueError(msg)
+
+
+def _looks_continuous_numeric_target(series: pd.Series, unique_values: list[object]) -> bool:
+    if len(unique_values) <= 20:
+        return False
+
+    non_missing = series.dropna()
+    numeric_values = pd.to_numeric(non_missing, errors="coerce")
+    if numeric_values.isna().any():
+        return False
+
+    unique_rate = len(unique_values) / len(non_missing)
+    return unique_rate > 0.2
 
 
 def _build_binary_label_mapping(unique_values: list[object]) -> tuple[dict[object, int], str]:

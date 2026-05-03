@@ -51,6 +51,7 @@ def build_parser() -> argparse.ArgumentParser:
     compare_parser.add_argument("--loop-steps", type=int, default=3, help="How many bounded Treehouse loop steps to run in the isolated comparison workspace.")
     compare_parser.add_argument("--output-dir", type=Path, default=None, help="Optional destination directory for comparison outputs.")
     compare_parser.add_argument("--skip-autogluon", action="store_true", help="Skip the optional AutoGluon runner.")
+    compare_parser.add_argument("--skip-flaml", action="store_true", help="Skip the optional FLAML runner.")
     compare_parser.add_argument("--llm-summary", action="store_true", help="Ask the configured LLM to synthesize the comparison report.")
     compare_parser.add_argument("--llm-question", default=None, help="Optional question for the comparison synthesis step.")
     compare_parser.add_argument(
@@ -65,11 +66,18 @@ def build_parser() -> argparse.ArgumentParser:
         help="Optional AutoGluon presets override. Use a comma-separated list such as good_quality,optimize_for_deployment.",
     )
     compare_parser.add_argument("--autogluon-time-limit", type=int, default=None, help="Optional AutoGluon time limit in seconds.")
+    compare_parser.add_argument("--flaml-time-budget", type=int, default=None, help="Optional FLAML time budget in seconds.")
+    compare_parser.add_argument(
+        "--flaml-estimators",
+        default=None,
+        help="Optional FLAML estimator list override. Use a comma-separated list such as xgboost,rf,extra_tree.",
+    )
 
     suite_parser = subparsers.add_parser("benchmark-suite", help="Run a fixed benchmark suite through the comparison harness.")
     suite_parser.add_argument("suite_config", type=Path, help="Path to the benchmark suite YAML.")
     suite_parser.add_argument("--output-dir", type=Path, default=None, help="Optional destination directory for suite outputs.")
     suite_parser.add_argument("--skip-autogluon", action="store_true", help="Skip optional AutoGluon runners for every dataset.")
+    suite_parser.add_argument("--skip-flaml", action="store_true", help="Skip optional FLAML runners for every dataset.")
     suite_parser.add_argument("--llm-summary", action="store_true", help="Ask the configured LLM to synthesize each dataset comparison.")
 
     return parser
@@ -132,17 +140,21 @@ def main() -> None:
             output_dir=args.output_dir,
             loop_steps=args.loop_steps,
             include_autogluon=not args.skip_autogluon,
+            include_flaml=not args.skip_flaml,
             include_llm_summary=args.llm_summary,
             llm_question=args.llm_question,
             autogluon_profile=args.autogluon_profile,
             autogluon_presets=args.autogluon_presets,
             autogluon_time_limit=args.autogluon_time_limit,
+            flaml_time_budget=args.flaml_time_budget,
+            flaml_estimator_list=args.flaml_estimators,
         )
     elif args.command == "benchmark-suite":
         result = run_benchmark_suite(
             args.suite_config,
             output_dir=args.output_dir,
             include_autogluon=not args.skip_autogluon,
+            include_flaml=not args.skip_flaml,
             include_llm_summary=args.llm_summary,
         )
     else:

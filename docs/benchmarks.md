@@ -114,13 +114,13 @@ The first v1.3 benchmark contract lives at:
 configs/benchmark_suites/public_v1_3.yaml
 ```
 
-Run it without optional AutoGluon when you want a fast Treehouse/plain-XGBoost pass:
+Run it without optional external AutoML runners when you want a fast Treehouse/plain-XGBoost pass:
 
 ```bash
-treehouse-lab benchmark-suite configs/benchmark_suites/public_v1_3.yaml --skip-autogluon
+treehouse-lab benchmark-suite configs/benchmark_suites/public_v1_3.yaml --skip-autogluon --skip-flaml
 ```
 
-Run it with the practical AutoGluon reference after preparing the benchmark environment:
+Run it with the practical AutoGluon and FLAML references after preparing the benchmark environment:
 
 ```bash
 ./scripts/setup_benchmark_env.sh
@@ -133,7 +133,21 @@ The suite keeps the public benchmark story small and fixed:
 - Adult: mixed-type census-income classification with missing categorical values
 - Covertype: larger multiclass land-cover classification
 
-The suite currently compares plain XGBoost, Treehouse baseline, Treehouse bounded loop, and practical AutoGluon. FLAML is intentionally tracked as the next external runner rather than bundled into this first suite contract.
+The suite compares plain XGBoost, Treehouse baseline, Treehouse bounded loop, practical AutoGluon, and budgeted FLAML when the optional benchmark environment is installed. Missing optional runners are reported as unavailable instead of crashing the suite.
+
+When `TREEHOUSE_LAB_LOOP_LLM_SELECTION=true`, the Treehouse loop still generates candidates deterministically first. The compare output now records the deterministic top-ranked proposal beside the LLM-selected proposal, then reports whether the LLM changed the next step or mutation family. Treat that as exploration evidence, not an automatic metric claim:
+
+- metric value: did the selected run beat the incumbent and clear readiness gates?
+- exploration value: did the LLM choose a different bounded family than deterministic ranking would have chosen?
+- explanation value: did the recorded rationale make the tradeoff easier to review?
+
+Treehouse reports should now separate three kinds of value:
+
+- metric value: whether the validation/test numbers improved under the fixed split contract
+- exploration value: whether the next move stayed bounded, attributable, and reviewable
+- explanation value: whether any LLM-guided narrative cites local proposal grounding instead of inventing a wider search
+
+The bounded grounding payload is intentionally local: it points to the declared search space, loop contract, and evaluation policy rather than adding a retrieval system or external literature dependency.
 
 ## 2.0 benchmark direction
 
@@ -160,6 +174,7 @@ The goal is not to win every benchmark. The goal is to explain when Treehouse La
 - when a team wants disciplined bounded search instead of opaque automation
 - when promotion logic and run narratives matter
 - when exported artifacts and reviewable decisions are more important than squeezing out every last benchmark point
+- when the loop can show that it stopped repeating weak mutation families and forced a bounded fallback instead
 
 Explicit non-goal for `2.0`:
 

@@ -4,6 +4,8 @@ from dataclasses import asdict, dataclass, field
 from typing import Any
 from uuid import uuid4
 
+from treehouse_lab.grounding import build_proposal_grounding
+
 
 @dataclass(slots=True)
 class ExperimentProposal:
@@ -24,6 +26,8 @@ class ExperimentProposal:
     loop_step_index: int = 0
     score: float = 0.0
     llm_review: dict[str, Any] = field(default_factory=dict)
+    grounding: dict[str, Any] = field(default_factory=dict)
+    cycle_guard: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -97,6 +101,12 @@ def build_mutation_proposal(
         stage=stage,
         loop_step_index=context.loop_step_index,
         score=score,
+        grounding=build_proposal_grounding(
+            context,
+            mutation_type,
+            params_override=params_override,
+            feature_generation=feature_generation,
+        ),
     )
 
 

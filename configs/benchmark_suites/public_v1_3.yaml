@@ -5,13 +5,17 @@ suite:
   fixed_seed: 42
   loop_steps: 3
   autogluon_profile: practical
+  flaml_time_budget: 30
+  flaml_estimator_list:
+    - xgboost
+    - rf
+    - extra_tree
   runners:
     included:
       - plain_xgboost_baseline
       - treehouse_lab_baseline
       - treehouse_lab_bounded_loop
       - autogluon_tabular_practical
-    planned:
       - flaml_comparison_runner
 
 datasets:
@@ -34,6 +38,7 @@ datasets:
     fetch_command: python3 scripts/fetch_covertype.py
     loop_steps: 2
     autogluon_time_limit: 60
+    flaml_time_budget: 60
     notes:
       - Larger multiclass land-cover benchmark outside the business domain.
-      - Uses fewer bounded loop steps and a capped external AutoGluon budget to keep local runs practical.
+      - Uses fewer bounded loop steps and capped external runner budgets to keep local runs practical.

@@ -292,12 +292,17 @@ class AutonomousLoopController:
     ) -> ExperimentProposal:
         top_proposal = candidates[0].proposal
         if not force_llm and not llm_loop_selection_enabled(self.project_root):
-            top_proposal.llm_review = {
+            selected, cycle_guard = _apply_cycle_guard(context, candidates, top_proposal)
+            selected.llm_review = {
                 "status": "disabled",
                 "message": "LLM loop selection is disabled, so Treehouse Lab used deterministic candidate ranking.",
                 "candidate_count": len(candidates),
+                **_selection_evidence(candidates, selected),
             }
-            return top_proposal
+            if cycle_guard:
+                selected.cycle_guard = cycle_guard
+                selected.llm_review["cycle_guard_triggered"] = True
+            return selected
 
         selection_context = {
             "dataset_key": context.dataset_key,
@@ -325,6 +330,7 @@ class AutonomousLoopController:
         selection_candidates = [
             {
                 "proposal_id": candidate.proposal.proposal_id,
+                "deterministic_rank": rank,
                 "mutation_type": candidate.proposal.mutation_type,
                 "mutation_name": candidate.proposal.mutation_name,
                 "score": candidate.proposal.score,
@@ -335,8 +341,9 @@ class AutonomousLoopController:
                 "params_override": candidate.proposal.params_override,
                 "feature_generation": candidate.proposal.feature_generation,
                 "stage": candidate.proposal.stage,
+                "grounding": candidate.proposal.grounding,
             }
-            for candidate in candidates
+            for rank, candidate in enumerate(candidates, start=1)
         ]
 
         selection = select_bounded_proposal(selection_context, selection_candidates)
@@ -345,14 +352,26 @@ class AutonomousLoopController:
             None,
         )
         if selected is None:
-            top_proposal.llm_review = {
+            selected, cycle_guard = _apply_cycle_guard(context, candidates, top_proposal)
+            selected.llm_review = {
                 **selection.to_dict(),
                 "status": "fallback",
                 "fallback_proposal_id": top_proposal.proposal_id,
+                **_selection_evidence(candidates, selected),
             }
-            return top_proposal
+            if cycle_guard:
+                selected.cycle_guard = cycle_guard
+                selected.llm_review["cycle_guard_triggered"] = True
+            return selected
 
-        selected.llm_review = selection.to_dict()
+        selected, cycle_guard = _apply_cycle_guard(context, candidates, selected)
+        selected.llm_review = {
+            **selection.to_dict(),
+            **_selection_evidence(candidates, selected),
+        }
+        if cycle_guard:
+            selected.cycle_guard = cycle_guard
+            selected.llm_review["cycle_guard_triggered"] = True
         return selected
 
     def _candidate_bundle(
@@ -463,3 +482,77 @@ class AutonomousLoopController:
             if key in incumbent_entry:
                 enriched[key] = incumbent_entry[key]
         return enriched
+
+
+def _selection_evidence(candidates: list[Any], selected: ExperimentProposal) -> dict[str, Any]:
+    deterministic = candidates[0].proposal
+    selected_rank = next(
+        (rank for rank, candidate in enumerate(candidates, start=1) if candidate.proposal.proposal_id == selected.proposal_id),
+        None,
+    )
+    return {
+        "deterministic_proposal_id": deterministic.proposal_id,
+        "deterministic_mutation_type": deterministic.mutation_type,
+        "deterministic_mutation_name": deterministic.mutation_name,
+        "deterministic_score": deterministic.score,
+        "deterministic_rank": 1,
+        "selected_proposal_id": selected.proposal_id,
+        "selected_mutation_type": selected.mutation_type,
+        "selected_mutation_name": selected.mutation_name,
+        "selected_score": selected.score,
+        "selected_rank": selected_rank,
+        "selection_changed": selected.proposal_id != deterministic.proposal_id,
+        "mutation_type_changed": selected.mutation_type != deterministic.mutation_type,
+    }
+
+
+def _apply_cycle_guard(
+    context: ProposalDecisionContext,
+    candidates: list[Any],
+    selected: ExperimentProposal,
+) -> tuple[ExperimentProposal, dict[str, Any] | None]:
+    weak_counts = _weak_mutation_counts(context.journal_entries, context.promote_threshold)
+    weak_attempt_count = weak_counts.get(selected.mutation_type, 0)
+    if weak_attempt_count < 2:
+        return selected, None
+
+    fallback = next(
+        (candidate.proposal for candidate in candidates if candidate.proposal.mutation_type != selected.mutation_type),
+        None,
+    )
+    if fallback is None:
+        return selected, {
+            "triggered": True,
+            "blocked_proposal_id": selected.proposal_id,
+            "blocked_mutation_type": selected.mutation_type,
+            "fallback_proposal_id": None,
+            "fallback_mutation_type": None,
+            "recent_weak_attempt_count": weak_attempt_count,
+            "reason": f"Recent {selected.mutation_type} attempts missed the promotion threshold, but no different bounded fallback was available.",
+        }
+
+    return fallback, {
+        "triggered": True,
+        "blocked_proposal_id": selected.proposal_id,
+        "blocked_mutation_type": selected.mutation_type,
+        "fallback_proposal_id": fallback.proposal_id,
+        "fallback_mutation_type": fallback.mutation_type,
+        "recent_weak_attempt_count": weak_attempt_count,
+        "reason": f"Recent {selected.mutation_type} attempts missed the promotion threshold.",
+    }
+
+
+def _weak_mutation_counts(journal_entries: list[dict[str, Any]], promote_threshold: float) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for entry in journal_entries[-8:]:
+        proposal = entry.get("proposal", {})
+        mutation_type = entry.get("mutation_type") or proposal.get("mutation_type")
+        if not mutation_type or entry.get("promoted") is True:
+            continue
+        delta = entry.get("comparison_to_incumbent", {}).get("delta")
+        if delta is None:
+            continue
+        if float(delta) < promote_threshold:
+            key = str(mutation_type)
+            counts[key] = counts.get(key, 0) + 1
+    return counts

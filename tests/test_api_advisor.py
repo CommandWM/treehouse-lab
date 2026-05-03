@@ -315,6 +315,8 @@ def test_advisor_returns_grounded_answer_with_mocked_ollama(
         "learning-rate-tradeoff",
         "learning-rate-tradeoff",
     ]
+    assert payload["grounding"]["bounded_references"][0]["path"] == "configs/search_space.yaml"
+    assert payload["grounding"]["proposal_grounding"]["mutation_type"] == "imbalance_adjustment"
 
     request = captured["calls"][0]
     assert request["headers"]["Authorization"] == "Bearer test-key"

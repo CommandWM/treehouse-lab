@@ -13,9 +13,10 @@ fi
 "$ENV_DIR/bin/python" -m pip install --upgrade pip setuptools wheel
 "$ENV_DIR/bin/python" -m pip install -e ".[dev,llm]"
 
-# The comparison harness only imports autogluon.tabular, so keep the benchmark
-# environment intentionally narrower than a full AutoGluon meta-package install.
+# Keep external benchmark dependencies out of the core package. This environment
+# is intentionally for optional comparison runners only.
 "$ENV_DIR/bin/python" -m pip install autogluon.tabular
+"$ENV_DIR/bin/python" -m pip install flaml
 
 echo "Benchmark environment ready at $ENV_DIR"
 echo "Use: $ENV_DIR/bin/python -m treehouse_lab.cli compare ..."

@@ -136,6 +136,10 @@ def test_summarize_loop_llm_guidance_counts_available_reviews() -> None:
                     "llm_review": {
                         "status": "available",
                         "provider": "agent_cli:codex",
+                        "deterministic_mutation_type": "regularization_tighten",
+                        "selected_mutation_type": "regularization_tighten",
+                        "selection_changed": False,
+                        "mutation_type_changed": False,
                     }
                 }
             },
@@ -144,6 +148,10 @@ def test_summarize_loop_llm_guidance_counts_available_reviews() -> None:
                     "llm_review": {
                         "status": "available",
                         "provider": "agent_cli:codex",
+                        "deterministic_mutation_type": "regularization_tighten",
+                        "selected_mutation_type": "imbalance_adjustment",
+                        "selection_changed": True,
+                        "mutation_type_changed": True,
                     }
                 }
             },
@@ -154,6 +162,44 @@ def test_summarize_loop_llm_guidance_counts_available_reviews() -> None:
     assert guidance["llm_reviewed_step_count"] == 3
     assert guidance["llm_provider"] == "agent_cli:codex"
     assert guidance["llm_guidance_statuses"] == ["available", "disabled"]
+    assert guidance["llm_changed_selection_count"] == 1
+    assert guidance["llm_changed_mutation_type_count"] == 1
+    assert guidance["llm_selection_changes"] == [
+        {
+            "deterministic_mutation_type": "regularization_tighten",
+            "selected_mutation_type": "imbalance_adjustment",
+        }
+    ]
+
+
+def test_practical_takeaway_surfaces_llm_selection_changes() -> None:
+    import treehouse_lab.comparison as comparison_module
+
+    loop_summary = comparison_module.ComparisonRunSummary(
+        runner_key="treehouse_lab_loop",
+        display_name="Treehouse Lab 2-Step Loop",
+        status="completed",
+        backend="xgboost",
+        validation_metric=0.81,
+        test_metric=0.8,
+        runtime_seconds=2.0,
+        benchmark_status="better_than_incumbent",
+        implementation_readiness="implementation_ready",
+        artifact_path="runs/loops/example",
+        workflow_traits={},
+        details={
+            "llm_guided_step_count": 2,
+            "llm_reviewed_step_count": 2,
+            "llm_changed_selection_count": 1,
+            "llm_changed_mutation_type_count": 1,
+            "llm_provider": "agent_cli:codex",
+        },
+    )
+
+    takeaway = comparison_module._render_practical_takeaway([loop_summary])
+
+    assert any("changed the deterministic top choice on 1/2 bounded selections" in line for line in takeaway)
+    assert any("changed mutation family on 1 step" in line for line in takeaway)
 
 
 def test_build_autogluon_fit_kwargs_uses_holdout_for_bagged_presets() -> None:
@@ -175,6 +221,60 @@ def test_build_autogluon_fit_kwargs_uses_holdout_for_bagged_presets() -> None:
     assert fit_kwargs["excluded_model_types"] == ["NN_TORCH"]
 
 
+def test_resolve_flaml_runner_config_uses_practical_defaults(tmp_path: Path) -> None:
+    config_path = write_fixture_project(tmp_path)
+
+    import treehouse_lab.comparison as comparison_module
+    from treehouse_lab.runner import TreehouseLabRunner
+
+    runner = TreehouseLabRunner(config_path)
+    settings = comparison_module._resolve_flaml_runner_config(
+        runner.config,
+        time_budget=None,
+        estimator_list=None,
+    )
+
+    assert settings.time_budget == 30
+    assert settings.estimator_list == ["xgboost", "rf", "extra_tree"]
+    assert settings.display_name == "FLAML AutoML (Practical)"
+
+
+def test_build_flaml_fit_kwargs_uses_existing_holdout_split(tmp_path: Path) -> None:
+    config_path = write_fixture_project(tmp_path)
+
+    import treehouse_lab.comparison as comparison_module
+    from treehouse_lab.datasets import load_dataset, split_dataset
+    from treehouse_lab.runner import TreehouseLabRunner
+
+    runner = TreehouseLabRunner(config_path)
+    dataset = load_dataset(runner.config, runner.project_root)
+    split = split_dataset(dataset, runner.config)
+    runner_config = comparison_module.FLAMLRunnerConfig(
+        time_budget=15,
+        estimator_list=["xgboost"],
+    )
+
+    fit_kwargs = comparison_module._build_flaml_fit_kwargs(
+        base_runner=runner,
+        dataset=dataset,
+        split=split,
+        runner_config=runner_config,
+        log_file_path=tmp_path / "flaml.log",
+    )
+
+    assert fit_kwargs["X_train"].equals(split.X_train)
+    assert fit_kwargs["y_train"].equals(split.y_train)
+    assert fit_kwargs["X_val"].equals(split.X_val)
+    assert fit_kwargs["y_val"].equals(split.y_val)
+    assert fit_kwargs["eval_method"] == "holdout"
+    assert fit_kwargs["retrain_full"] is False
+    assert fit_kwargs["task"] == "classification"
+    assert fit_kwargs["metric"] == "roc_auc"
+    assert fit_kwargs["time_budget"] == 15
+    assert fit_kwargs["estimator_list"] == ["xgboost"]
+    assert fit_kwargs["seed"] == 42
+
+
 def test_run_comparison_suite_without_autogluon(tmp_path: Path) -> None:
     config_path = write_fixture_project(tmp_path)
 
@@ -182,6 +282,7 @@ def test_run_comparison_suite_without_autogluon(tmp_path: Path) -> None:
         config_path,
         output_dir=tmp_path / "outputs" / "compare",
         include_autogluon=False,
+        include_flaml=False,
         loop_steps=1,
     )
 
@@ -217,6 +318,7 @@ def test_run_comparison_suite_marks_autogluon_unavailable(tmp_path: Path, monkey
         config_path,
         output_dir=tmp_path / "outputs" / "compare_with_ag",
         include_autogluon=True,
+        include_flaml=False,
         loop_steps=1,
     )
 
@@ -247,12 +349,91 @@ def test_run_comparison_suite_marks_autogluon_error_without_crashing(tmp_path: P
         config_path,
         output_dir=tmp_path / "outputs" / "compare_with_ag_error",
         include_autogluon=True,
+        include_flaml=False,
         loop_steps=1,
     )
 
     runners = {runner["runner_key"]: runner for runner in result.runners}
     assert runners["autogluon_tabular"]["status"] == "error"
     assert "synthetic autogluon failure" in runners["autogluon_tabular"]["notes"][-1]
+
+
+def test_run_comparison_suite_marks_flaml_unavailable(tmp_path: Path, monkeypatch) -> None:
+    config_path = write_fixture_project(tmp_path)
+
+    import treehouse_lab.comparison as comparison_module
+
+    original_import_module = comparison_module.importlib.import_module
+
+    def fake_import_module(name: str):
+        if name == "flaml":
+            raise ModuleNotFoundError(name)
+        return original_import_module(name)
+
+    monkeypatch.setattr(comparison_module.importlib, "import_module", fake_import_module)
+
+    result = run_comparison_suite(
+        config_path,
+        output_dir=tmp_path / "outputs" / "compare_with_flaml",
+        include_autogluon=False,
+        include_flaml=True,
+        loop_steps=1,
+    )
+
+    runners = {runner["runner_key"]: runner for runner in result.runners}
+    assert runners["flaml_automl"]["status"] == "unavailable"
+    summary_payload = json.loads(Path(result.summary_path).read_text(encoding="utf-8"))
+    assert any(runner["runner_key"] == "flaml_automl" for runner in summary_payload["runners"])
+
+
+def test_run_comparison_suite_runs_flaml_when_available(tmp_path: Path, monkeypatch) -> None:
+    config_path = write_fixture_project(tmp_path)
+
+    import numpy as np
+    import treehouse_lab.comparison as comparison_module
+
+    fit_calls: list[dict[str, object]] = []
+
+    class FakeAutoML:
+        best_estimator = "xgboost"
+        best_config = {"n_estimators": 4, "max_depth": 2}
+        best_loss = 0.25
+        best_iteration = 1
+
+        def fit(self, **kwargs):
+            fit_calls.append(kwargs)
+
+        def predict(self, frame: pd.DataFrame) -> np.ndarray:
+            return np.asarray([0, 1] * ((len(frame) + 1) // 2), dtype=int)[: len(frame)]
+
+        def predict_proba(self, frame: pd.DataFrame) -> np.ndarray:
+            labels = self.predict(frame)
+            positive = np.where(labels == 1, 0.8, 0.2)
+            return np.column_stack([1 - positive, positive])
+
+    class FakeModule:
+        AutoML = FakeAutoML
+
+    monkeypatch.setattr(comparison_module.importlib, "import_module", lambda name: FakeModule())
+
+    result = run_comparison_suite(
+        config_path,
+        output_dir=tmp_path / "outputs" / "compare_with_flaml_completed",
+        include_autogluon=False,
+        include_flaml=True,
+        loop_steps=1,
+        flaml_time_budget=7,
+        flaml_estimator_list=["xgboost"],
+    )
+
+    runners = {runner["runner_key"]: runner for runner in result.runners}
+    assert runners["flaml_automl"]["status"] == "completed"
+    assert runners["flaml_automl"]["details"]["best_estimator"] == "xgboost"
+    assert runners["flaml_automl"]["details"]["time_budget"] == 7
+    assert runners["flaml_automl"]["details"]["estimator_list"] == ["xgboost"]
+    assert fit_calls[0]["X_val"].shape[0] > 0
+    assert fit_calls[0]["eval_method"] == "holdout"
+    assert fit_calls[0]["retrain_full"] is False
 
 
 def test_run_comparison_suite_includes_llm_summary_when_requested(tmp_path: Path, monkeypatch) -> None:
@@ -284,6 +465,7 @@ def test_run_comparison_suite_includes_llm_summary_when_requested(tmp_path: Path
         config_path,
         output_dir=tmp_path / "outputs" / "compare_with_llm",
         include_autogluon=False,
+        include_flaml=False,
         include_llm_summary=True,
         llm_question="Where is the real product value here?",
         loop_steps=1,
@@ -323,6 +505,7 @@ def test_run_comparison_suite_records_unavailable_llm_summary(tmp_path: Path, mo
         config_path,
         output_dir=tmp_path / "outputs" / "compare_with_unavailable_llm",
         include_autogluon=False,
+        include_flaml=False,
         include_llm_summary=True,
         loop_steps=1,
     )
@@ -378,6 +561,12 @@ def test_render_report_surfaces_feature_generation_decisions() -> None:
             "steps": [
                 {
                     "proposal": {
+                        "cycle_guard": {
+                            "triggered": True,
+                            "blocked_mutation_type": "learning_rate_tradeoff",
+                            "fallback_mutation_type": "feature_generation_enable",
+                            "reason": "Recent learning_rate_tradeoff attempts missed the promotion threshold.",
+                        },
                         "feature_generation": {
                             "enabled": True,
                             "reason": "Recent bounded parameter moves plateaued.",
@@ -419,3 +608,87 @@ def test_render_report_surfaces_feature_generation_decisions() -> None:
     assert "| Treehouse Lab 1-Step Loop | yes | yes | yes | 2 | not_better_than_incumbent / needs_more_work | Added bounded features, but outcome gates did not justify the added complexity. |" in report
     assert "`fg__square__age` via `square` on `age`" in report
     assert "Recent bounded parameter moves plateaued." in report
+    assert "## Weak-cycle fallback guard" in report
+    assert "| Treehouse Lab 1-Step Loop | yes | learning_rate_tradeoff | feature_generation_enable | Recent learning_rate_tradeoff attempts missed the promotion threshold. |" in report
+
+
+def test_render_report_surfaces_bounded_research_grounding() -> None:
+    import treehouse_lab.comparison as comparison_module
+
+    class FakeSource:
+        name = "Fixture Dataset"
+
+    class FakeConfig:
+        source = FakeSource()
+        primary_metric = "roc_auc"
+
+    class FakeRunner:
+        registry_key = "fixture_dataset"
+        config_path = Path("configs/datasets/fixture_dataset.yaml")
+        config = FakeConfig()
+
+    class FakeDataset:
+        target_name = "target"
+        target_profile = {"task_kind": "binary_classification"}
+
+    class FakeSplit:
+        def summary(self) -> dict[str, object]:
+            return {"train_rows": 80, "validation_rows": 20, "test_rows": 20}
+
+    treehouse_loop = comparison_module.ComparisonRunSummary(
+        runner_key="treehouse_lab_loop",
+        display_name="Treehouse Lab 1-Step Loop",
+        status="completed",
+        backend="xgboost",
+        validation_metric=0.842,
+        test_metric=0.831,
+        runtime_seconds=2.4,
+        benchmark_status="not_better_than_incumbent",
+        implementation_readiness="needs_more_work",
+        artifact_path="runs/loops/example",
+        workflow_traits={
+            "search_style": "bounded_loop",
+            "artifact_trail": "full_plus_loop_summary",
+            "journal": "yes",
+            "bounded_next_step": "yes",
+            "llm_guidance": "no",
+        },
+        details={
+            "steps": [
+                {
+                    "proposal": {
+                        "mutation_type": "imbalance_adjustment",
+                        "grounding": {
+                            "scope": "bounded_local_reference",
+                            "references": [
+                                {"path": "configs/search_space.yaml", "title": "Search space bounds"},
+                                {"path": "docs/autonomous-loop.md", "title": "Loop ranking logic"},
+                            ],
+                            "evidence": [
+                                {"name": "positive_rate", "value": 0.117},
+                                {"name": "promote_threshold", "value": 0.003},
+                            ],
+                        },
+                    },
+                    "result": {"assessment": {}},
+                }
+            ]
+        },
+    )
+
+    report = comparison_module._render_report(
+        base_runner=FakeRunner(),
+        dataset=FakeDataset(),
+        split=FakeSplit(),
+        run_summaries=[treehouse_loop],
+        loop_steps=1,
+        llm_summary=None,
+    )
+    details = comparison_module._llm_safe_runner_details(treehouse_loop)
+
+    assert "## Bounded research grounding" in report
+    assert "| Treehouse Lab 1-Step Loop | imbalance_adjustment | bounded_local_reference | configs/search_space.yaml, docs/autonomous-loop.md | positive_rate, promote_threshold |" in report
+    assert details["proposal_grounding"][0]["reference_paths"] == [
+        "configs/search_space.yaml",
+        "docs/autonomous-loop.md",
+    ]

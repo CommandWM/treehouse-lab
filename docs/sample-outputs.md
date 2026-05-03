@@ -82,9 +82,35 @@ Representative excerpt:
   "hypothesis": "Explicit positive-class weighting may improve ranking quality on skewed targets.",
   "expected_upside": "Improved ranking on the positive class without changing the dataset split policy.",
   "rationale": "Diagnosis: Validation roc_auc is 0.9302. Positive rate is 0.2392, so imbalance handling is worth considering. The positive-class rate is 0.239, which is far enough from parity to justify a bounded class-balance adjustment.",
+  "grounding": {
+    "scope": "bounded_local_reference",
+    "mutation_type": "imbalance_adjustment",
+    "evidence": [
+      {"name": "primary_metric", "value": "roc_auc"},
+      {"name": "positive_rate", "value": 0.2392},
+      {"name": "params_override", "value": {"scale_pos_weight": 3.18}}
+    ],
+    "references": [
+      {"path": "configs/search_space.yaml", "title": "Search space bounds"},
+      {"path": "docs/autonomous-loop.md", "title": "Autonomous loop contract"},
+      {"path": "docs/evaluation-policy.md", "title": "Dataset split contract"}
+    ]
+  },
   "llm_review": {
     "candidate_count": 4,
+    "deterministic_mutation_name": "imbalance-adjustment",
+    "deterministic_mutation_type": "imbalance_adjustment",
+    "deterministic_proposal_id": "proposal-abc123",
+    "deterministic_rank": 1,
+    "deterministic_score": 2.1,
     "message": "LLM loop selection is disabled, so Treehouse Lab used deterministic candidate ranking.",
+    "mutation_type_changed": false,
+    "selected_mutation_name": "imbalance-adjustment",
+    "selected_mutation_type": "imbalance_adjustment",
+    "selected_proposal_id": "proposal-abc123",
+    "selected_rank": 1,
+    "selected_score": 2.1,
+    "selection_changed": false,
     "status": "disabled"
   }
 }
@@ -95,7 +121,9 @@ What this shows:
 - the proposal is tied to a specific incumbent
 - the exact mutation stays explicit
 - the rationale stays inside the declared search space
+- grounding shows the local references and measured evidence used to justify the candidate
 - LLM review, when present, is visible rather than hidden
+- deterministic-vs-LLM selection evidence shows whether guidance changed the top-ranked bounded move
 
 ## Journal
 
@@ -150,8 +178,11 @@ Command:
 .venv-benchmarks/bin/python -m treehouse_lab.cli compare \
   configs/datasets/bank_marketing_uci.yaml \
   --loop-steps 1 \
-  --autogluon-profile practical
+  --autogluon-profile practical \
+  --skip-flaml
 ```
+
+Omit `--skip-flaml` in the v1.3 benchmark environment to add the budgeted FLAML runner to the same report.
 
 Representative report excerpt:
 
@@ -191,6 +222,12 @@ Representative report excerpt:
 | Treehouse Lab Baseline | no | no | no | 0 | baseline_established / implementation_ready | No bounded feature branch was selected. |
 | Treehouse Lab 1-Step Loop | no | no | no | 0 | baseline_established / implementation_ready | No bounded feature branch was selected. |
 | AutoGluon Tabular (Practical) | no | no | no | 0 | baseline_established / implementation_ready | No bounded feature branch was selected. |
+
+## Bounded research grounding
+
+| runner | mutation | scope | references | evidence |
+| --- | --- | --- | --- | --- |
+| Treehouse Lab 1-Step Loop | imbalance_adjustment | bounded_local_reference | configs/search_space.yaml, docs/autonomous-loop.md, docs/evaluation-policy.md | params_override, positive_rate, primary_metric, promote_threshold |
 ```
 
 What this shows:
@@ -199,6 +236,7 @@ What this shows:
 - Treehouse exposes the operating layer that plain baselines and AutoML do not
 - the report now separates benchmark position from implementation readiness
 - feature-generation complexity is visible as a bounded decision, not hidden in raw artifacts
+- bounded grounding makes proposal references inspectable before treating an LLM narrative as useful
 
 ## How To Use This Page
 

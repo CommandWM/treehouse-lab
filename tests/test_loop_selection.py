@@ -78,6 +78,9 @@ def test_select_candidate_uses_deterministic_top_when_llm_disabled(monkeypatch: 
 
     assert selected.proposal_id == "proposal-top"
     assert selected.llm_review["status"] == "disabled"
+    assert selected.llm_review["deterministic_proposal_id"] == "proposal-top"
+    assert selected.llm_review["deterministic_mutation_type"] == "imbalance_adjustment"
+    assert selected.llm_review["selection_changed"] is False
 
 
 def test_select_candidate_uses_llm_selected_candidate(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -116,6 +119,59 @@ def test_select_candidate_uses_llm_selected_candidate(monkeypatch: pytest.Monkey
 
     assert selected.proposal_id == "proposal-second"
     assert selected.llm_review["provider"] == "ollama"
+    assert selected.llm_review["deterministic_proposal_id"] == "proposal-top"
+    assert selected.llm_review["deterministic_mutation_type"] == "imbalance_adjustment"
+    assert selected.llm_review["deterministic_score"] == 2.1
+    assert selected.llm_review["selected_rank"] == 2
+    assert selected.llm_review["selection_changed"] is True
+    assert selected.llm_review["mutation_type_changed"] is True
+
+
+def test_select_candidate_sends_grounding_to_llm_candidates(monkeypatch: pytest.MonkeyPatch) -> None:
+    controller = make_controller()
+    context = make_context()
+    top = make_proposal("proposal-top", "imbalance_adjustment", 2.1)
+    second = make_proposal("proposal-second", "learning_rate_tradeoff", 1.4)
+    top.grounding = {
+        "scope": "bounded_local_reference",
+        "mutation_type": "imbalance_adjustment",
+        "references": [{"path": "configs/search_space.yaml", "title": "Search space bounds"}],
+        "evidence": [{"name": "positive_rate", "value": 0.117}],
+    }
+    second.grounding = {
+        "scope": "bounded_local_reference",
+        "mutation_type": "learning_rate_tradeoff",
+        "references": [{"path": "docs/autonomous-loop.md", "title": "Loop ranking logic"}],
+        "evidence": [{"name": "overfit_gap", "value": 0.0299}],
+    }
+    candidates = [SimpleNamespace(proposal=top), SimpleNamespace(proposal=second)]
+    captured: dict[str, object] = {}
+
+    monkeypatch.setattr("treehouse_lab.loop.llm_loop_selection_enabled", lambda *args, **kwargs: True)
+
+    def fake_select(context: dict[str, object], candidates: list[dict[str, object]]) -> SimpleNamespace:
+        captured["candidates"] = candidates
+        return SimpleNamespace(
+            selected_proposal_id="proposal-top",
+            to_dict=lambda: {
+                "status": "available",
+                "provider": "ollama",
+                "model": "gpt-oss:20b",
+                "selected_proposal_id": "proposal-top",
+                "rationale": "The grounded imbalance candidate is the bounded next move.",
+                "message": None,
+                "raw_output": '{"selected_proposal_id":"proposal-top"}',
+                "candidate_count": 2,
+            },
+        )
+
+    monkeypatch.setattr("treehouse_lab.loop.select_bounded_proposal", fake_select)
+
+    selected = controller._select_candidate(context, candidates)
+
+    assert selected.proposal_id == "proposal-top"
+    assert captured["candidates"][0]["grounding"]["scope"] == "bounded_local_reference"
+    assert captured["candidates"][0]["grounding"]["references"][0]["path"] == "configs/search_space.yaml"
 
 
 def test_select_candidate_falls_back_when_llm_selection_is_invalid(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -148,6 +204,8 @@ def test_select_candidate_falls_back_when_llm_selection_is_invalid(monkeypatch: 
     assert selected.proposal_id == "proposal-top"
     assert selected.llm_review["status"] == "fallback"
     assert selected.llm_review["fallback_proposal_id"] == "proposal-top"
+    assert selected.llm_review["deterministic_proposal_id"] == "proposal-top"
+    assert selected.llm_review["selection_changed"] is False
 
 
 def test_select_candidate_force_llm_bypasses_disabled_gate(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -186,6 +244,90 @@ def test_select_candidate_force_llm_bypasses_disabled_gate(monkeypatch: pytest.M
 
     assert selected.proposal_id == "proposal-second"
     assert selected.llm_review["status"] == "available"
+    assert selected.llm_review["deterministic_proposal_id"] == "proposal-top"
+    assert selected.llm_review["selection_changed"] is True
+
+
+def test_select_candidate_forces_deterministic_fallback_after_repeated_weak_family(monkeypatch: pytest.MonkeyPatch) -> None:
+    controller = make_controller()
+    context = make_context()
+    context.journal_entries = [
+        {
+            "name": "learning-rate-tradeoff",
+            "promoted": False,
+            "comparison_to_incumbent": {"delta": 0.0003},
+            "proposal": {"mutation_type": "learning_rate_tradeoff"},
+        },
+        {
+            "name": "learning-rate-tradeoff-repeat",
+            "promoted": False,
+            "comparison_to_incumbent": {"delta": 0.0004},
+            "proposal": {"mutation_type": "learning_rate_tradeoff"},
+        },
+    ]
+    repeated = make_proposal("proposal-repeat", "learning_rate_tradeoff", 2.4)
+    fallback = make_proposal("proposal-fallback", "imbalance_adjustment", 1.6)
+    candidates = [SimpleNamespace(proposal=repeated), SimpleNamespace(proposal=fallback)]
+
+    monkeypatch.setattr("treehouse_lab.loop.llm_loop_selection_enabled", lambda *args, **kwargs: False)
+
+    selected = controller._select_candidate(context, candidates)
+
+    assert selected.proposal_id == "proposal-fallback"
+    assert selected.cycle_guard["triggered"] is True
+    assert selected.cycle_guard["blocked_mutation_type"] == "learning_rate_tradeoff"
+    assert selected.cycle_guard["fallback_mutation_type"] == "imbalance_adjustment"
+    assert selected.cycle_guard["recent_weak_attempt_count"] == 2
+    assert selected.to_dict()["cycle_guard"]["triggered"] is True
+
+
+def test_select_candidate_applies_cycle_guard_to_llm_selected_repeated_family(monkeypatch: pytest.MonkeyPatch) -> None:
+    controller = make_controller()
+    context = make_context()
+    context.journal_entries = [
+        {
+            "name": "learning-rate-tradeoff",
+            "promoted": False,
+            "comparison_to_incumbent": {"delta": 0.0003},
+            "proposal": {"mutation_type": "learning_rate_tradeoff"},
+        },
+        {
+            "name": "learning-rate-tradeoff-repeat",
+            "promoted": False,
+            "comparison_to_incumbent": {"delta": 0.0004},
+            "proposal": {"mutation_type": "learning_rate_tradeoff"},
+        },
+    ]
+    top = make_proposal("proposal-top", "imbalance_adjustment", 2.1)
+    repeated = make_proposal("proposal-repeat", "learning_rate_tradeoff", 1.9)
+    fallback = make_proposal("proposal-fallback", "regularization_tighten", 1.5)
+    candidates = [SimpleNamespace(proposal=top), SimpleNamespace(proposal=repeated), SimpleNamespace(proposal=fallback)]
+
+    monkeypatch.setattr("treehouse_lab.loop.llm_loop_selection_enabled", lambda *args, **kwargs: True)
+    monkeypatch.setattr(
+        "treehouse_lab.loop.select_bounded_proposal",
+        lambda context, candidates: SimpleNamespace(
+            selected_proposal_id="proposal-repeat",
+            to_dict=lambda: {
+                "status": "available",
+                "provider": "ollama",
+                "model": "gpt-oss:20b",
+                "selected_proposal_id": "proposal-repeat",
+                "rationale": "Try the repeated family again.",
+                "message": None,
+                "raw_output": '{"selected_proposal_id":"proposal-repeat"}',
+                "candidate_count": 3,
+            },
+        ),
+    )
+
+    selected = controller._select_candidate(context, candidates)
+
+    assert selected.proposal_id == "proposal-top"
+    assert selected.cycle_guard["triggered"] is True
+    assert selected.cycle_guard["blocked_proposal_id"] == "proposal-repeat"
+    assert selected.cycle_guard["fallback_proposal_id"] == "proposal-top"
+    assert selected.llm_review["cycle_guard_triggered"] is True
 
 
 def test_plateaued_loop_can_select_and_execute_feature_generation(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

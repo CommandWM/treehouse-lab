@@ -82,6 +82,20 @@ def test_inspect_classification_target_reports_multiclass_shape() -> None:
     assert profile["class_counts"] == {"0": 1, "1": 1, "2": 2}
 
 
+def test_inspect_classification_target_rejects_continuous_numeric_target() -> None:
+    series = pd.Series([100_000 + index * 1_000 for index in range(40)], name="SalePrice")
+
+    with pytest.raises(ValueError, match="continuous/regression-like"):
+        normalize_classification_target(series, "SalePrice")
+
+
+def test_explicit_multiclass_rejects_continuous_numeric_target() -> None:
+    series = pd.Series([100_000 + index * 1_000 for index in range(40)], name="SalePrice")
+
+    with pytest.raises(ValueError, match="continuous/regression-like"):
+        normalize_classification_target(series, "SalePrice", task_kind="multiclass_classification")
+
+
 def test_validate_stratified_split_feasibility_allows_balanced_data() -> None:
     target = pd.Series([0] * 10 + [1] * 10, name="churned")
 

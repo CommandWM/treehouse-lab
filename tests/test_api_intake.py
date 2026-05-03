@@ -72,6 +72,32 @@ def test_inspect_dataset_rejects_unknown_target_column(client: TestClient, tmp_p
     assert "Unknown target column" in response.text
 
 
+def test_upload_dataset_stores_csv_under_custom_datasets(client: TestClient, tmp_path: Path) -> None:
+    response = client.post(
+        "/api/intake/upload?filename=Customer Leads.csv",
+        content=b"visits,converted\n3,yes\n8,no\n",
+        headers={"content-type": "text/csv"},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["path"] == "custom_datasets/customer-leads.csv"
+    stored_path = tmp_path / payload["path"]
+    assert stored_path.exists()
+    assert stored_path.read_text(encoding="utf-8") == "visits,converted\n3,yes\n8,no\n"
+
+
+def test_upload_dataset_rejects_non_csv_filename(client: TestClient) -> None:
+    response = client.post(
+        "/api/intake/upload?filename=notes.txt",
+        content=b"not,a,csv\n",
+        headers={"content-type": "text/plain"},
+    )
+
+    assert response.status_code == 400
+    assert "CSV" in response.text
+
+
 def test_create_dataset_config_writes_explicit_yaml(client: TestClient, tmp_path: Path) -> None:
     dataset_path = tmp_path / "marketing_leads.csv"
     write_csv(
@@ -144,3 +170,100 @@ def test_create_dataset_config_supports_multiclass_target(client: TestClient, tm
     assert payload["config"]["task"]["kind"] == "multiclass_classification"
     assert payload["config"]["primary_metric"] == "accuracy"
     assert payload["inspection"]["target"]["multiclass_supported"] is True
+
+
+def test_create_dataset_config_defaults_incompatible_multiclass_metric(client: TestClient, tmp_path: Path) -> None:
+    dataset_path = tmp_path / "wine.csv"
+    write_csv(
+        dataset_path,
+        pd.DataFrame(
+            {
+                "alcohol": [14.2, 13.2, 12.4, 13.8, 12.1, 13.5, 11.9, 12.9, 13.1],
+                "class": [1, 1, 2, 2, 3, 3, 1, 2, 3],
+            }
+        ),
+    )
+
+    response = client.post(
+        "/api/intake/create",
+        json={
+            "path": str(dataset_path),
+            "target_column": "class",
+            "name": "Wine",
+            "primary_metric": "roc_auc",
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["config"]["task"]["kind"] == "multiclass_classification"
+    assert payload["config"]["primary_metric"] == "accuracy"
+
+
+def test_create_dataset_config_rejects_continuous_numeric_target(client: TestClient, tmp_path: Path) -> None:
+    dataset_path = tmp_path / "housing.csv"
+    write_csv(
+        dataset_path,
+        pd.DataFrame(
+            {
+                "sqft": list(range(40)),
+                "SalePrice": [100_000 + index * 1_000 for index in range(40)],
+            }
+        ),
+    )
+
+    response = client.post(
+        "/api/intake/create",
+        json={
+            "path": str(dataset_path),
+            "target_column": "SalePrice",
+            "name": "Housing",
+        },
+    )
+
+    assert response.status_code == 400
+    assert "continuous/regression-like" in response.text
+
+
+def test_baseline_returns_bad_request_for_invalid_target_config(client: TestClient, tmp_path: Path) -> None:
+    dataset_path = tmp_path / "housing.csv"
+    write_csv(
+        dataset_path,
+        pd.DataFrame(
+            {
+                "sqft": list(range(40)),
+                "SalePrice": [100_000 + index * 1_000 for index in range(40)],
+            }
+        ),
+    )
+    config_path = tmp_path / "configs" / "datasets" / "housing.yaml"
+    config_path.write_text(
+        f"""
+dataset:
+  source:
+    kind: csv
+    name: Housing
+    target_column: SalePrice
+    path: {dataset_path}
+  split:
+    validation_size: 0.2
+    test_size: 0.2
+    stratify: true
+task:
+  kind: multiclass_classification
+experiment:
+  name: housing-baseline
+  primary_metric: accuracy
+  promote_if_delta_at_least: 0.003
+  max_runtime_minutes: 10
+  seed: 42
+model:
+  params: {{}}
+""",
+        encoding="utf-8",
+    )
+
+    response = client.post("/api/configs/housing/baseline")
+
+    assert response.status_code == 400
+    assert "continuous/regression-like" in response.text

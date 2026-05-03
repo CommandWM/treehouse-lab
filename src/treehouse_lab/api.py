@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Any
 
 import pandas as pd
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 import yaml
@@ -152,6 +152,24 @@ def _resolve_dataset_path(raw_path: str) -> Path:
     return resolved
 
 
+def _upload_storage_path(filename: str) -> Path:
+    raw_name = Path(filename.strip()).name
+    if not raw_name:
+        raise HTTPException(status_code=400, detail="Upload filename is required.")
+    if Path(raw_name).suffix.lower() != ".csv":
+        raise HTTPException(status_code=400, detail="Dataset upload supports CSV files only.")
+
+    upload_dir = PROJECT_ROOT / "custom_datasets"
+    upload_dir.mkdir(parents=True, exist_ok=True)
+    stem = _slugify(Path(raw_name).stem)
+    candidate = upload_dir / f"{stem}.csv"
+    suffix = 2
+    while candidate.exists():
+        candidate = upload_dir / f"{stem}-{suffix}.csv"
+        suffix += 1
+    return candidate
+
+
 def _read_csv_frame(raw_path: str) -> tuple[Path, pd.DataFrame]:
     dataset_path = _resolve_dataset_path(raw_path)
     try:
@@ -230,7 +248,7 @@ def _build_dataset_config_payload(
         "Establish a clean incumbent for a user-provided dataset before bounded autoresearch begins."
     )
     task_kind = str(target_profile["task_kind"])
-    primary_metric = payload.primary_metric.strip() or _default_primary_metric(task_kind)
+    primary_metric = _resolve_primary_metric(task_kind, payload.primary_metric)
     return {
         "dataset": {
             "source": {
@@ -273,6 +291,29 @@ def _default_primary_metric(task_kind: str) -> str:
     if task_kind == "multiclass_classification":
         return "accuracy"
     return "roc_auc"
+
+
+def _primary_metric_options(task_kind: str) -> set[str]:
+    if task_kind == "multiclass_classification":
+        return {"accuracy", "macro_f1"}
+    return {"roc_auc"}
+
+
+def _resolve_primary_metric(task_kind: str, requested_metric: str) -> str:
+    metric = requested_metric.strip()
+    default_metric = _default_primary_metric(task_kind)
+    if not metric:
+        return default_metric
+    if task_kind == "multiclass_classification" and metric == "roc_auc":
+        return default_metric
+    if metric in _primary_metric_options(task_kind):
+        return metric
+
+    options = ", ".join(sorted(_primary_metric_options(task_kind)))
+    raise HTTPException(
+        status_code=400,
+        detail=f"Primary metric '{metric}' is not available for {task_kind}. Use one of: {options}.",
+    )
 
 
 def _serialize_config(config_key: str) -> dict[str, Any]:
@@ -479,6 +520,21 @@ def inspect_dataset(payload: DatasetInspectRequest) -> dict[str, Any]:
     return _inspect_frame(dataset_path, frame, target_column=payload.target_column)
 
 
+@app.post("/api/intake/upload")
+async def upload_dataset(filename: str, request: Request) -> dict[str, Any]:
+    body = await request.body()
+    if not body:
+        raise HTTPException(status_code=400, detail="Uploaded CSV is empty.")
+
+    storage_path = _upload_storage_path(filename)
+    storage_path.write_bytes(body)
+    return {
+        "path": _config_storage_path(storage_path),
+        "filename": storage_path.name,
+        "bytes": len(body),
+    }
+
+
 @app.post("/api/intake/create")
 def create_dataset_config(payload: DatasetCreateRequest) -> dict[str, Any]:
     if payload.validation_size + payload.test_size >= 1:
@@ -513,26 +569,35 @@ def create_dataset_config(payload: DatasetCreateRequest) -> dict[str, Any]:
 def run_baseline(config_key: str) -> dict[str, Any]:
     config_path = _config_path_from_key(config_key)
     runner = TreehouseLabRunner(config_path)
-    return runner.run_baseline().to_dict()
+    try:
+        return runner.run_baseline().to_dict()
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @app.post("/api/configs/{config_key}/candidate")
 def run_candidate(config_key: str, payload: CandidateRequest) -> dict[str, Any]:
     config_path = _config_path_from_key(config_key)
     runner = TreehouseLabRunner(config_path)
-    return runner.run_candidate(
-        mutation_name=payload.mutation_name,
-        overrides=payload.overrides,
-        hypothesis=payload.hypothesis,
-        feature_generation=payload.feature_generation or None,
-    ).to_dict()
+    try:
+        return runner.run_candidate(
+            mutation_name=payload.mutation_name,
+            overrides=payload.overrides,
+            hypothesis=payload.hypothesis,
+            feature_generation=payload.feature_generation or None,
+        ).to_dict()
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @app.post("/api/configs/{config_key}/loop")
 def run_loop(config_key: str, payload: LoopRequest) -> dict[str, Any]:
     config_path = _config_path_from_key(config_key)
     controller = AutonomousLoopController(config_path)
-    return controller.run_loop(max_steps=payload.steps).to_dict()
+    try:
+        return controller.run_loop(max_steps=payload.steps).to_dict()
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @app.post("/api/configs/{config_key}/export")

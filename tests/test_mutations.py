@@ -74,6 +74,11 @@ def test_generate_candidates_penalizes_repeated_rejected_templates() -> None:
     candidates = generate_candidates(context)
 
     assert candidates[0].proposal.mutation_type == "imbalance_adjustment"
+    grounding = candidates[0].proposal.grounding
+    assert grounding["scope"] == "bounded_local_reference"
+    assert grounding["mutation_type"] == "imbalance_adjustment"
+    assert any(reference["path"] == "configs/search_space.yaml" for reference in grounding["references"])
+    assert any(evidence["name"] == "positive_rate" and evidence["value"] == 0.117 for evidence in grounding["evidence"])
     learning_rate_candidate = next(
         candidate for candidate in candidates if candidate.proposal.mutation_type == "learning_rate_tradeoff"
     )

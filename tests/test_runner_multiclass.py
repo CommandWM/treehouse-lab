@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import pandas as pd
+import pytest
 import yaml
 
 from treehouse_lab.runner import TreehouseLabRunner
@@ -122,3 +123,15 @@ def test_runner_supports_multiclass_baselines(tmp_path: Path) -> None:
     assert "roc_auc" not in result.metrics
     assert result.split_summary["class_count"] == 3
     assert result.assessment["benchmark_status"] == "baseline_established"
+
+
+def test_runner_rejects_unavailable_multiclass_primary_metric(tmp_path: Path) -> None:
+    config_path = write_multiclass_fixture(tmp_path)
+    config_blob = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+    config_blob["experiment"]["primary_metric"] = "roc_auc"
+    config_path.write_text(yaml.safe_dump(config_blob, sort_keys=False), encoding="utf-8")
+
+    runner = TreehouseLabRunner(config_path)
+
+    with pytest.raises(ValueError, match="Primary metric 'roc_auc' is not available"):
+        runner.run_baseline()

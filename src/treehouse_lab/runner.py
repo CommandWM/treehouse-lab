@@ -166,8 +166,9 @@ class TreehouseLabRunner:
         model.fit(split.X_train, split.y_train)
 
         metrics = self._compute_metrics(model, split, task_kind=str(dataset.target_profile["task_kind"]))
+        primary_metric_value = self._primary_metric_value(metrics, task_kind=str(dataset.target_profile["task_kind"]))
         runtime_seconds = time.perf_counter() - run_started
-        promoted, comparison, decision_reason = self._promotion_decision(metrics[self.config.primary_metric])
+        promoted, comparison, decision_reason = self._promotion_decision(primary_metric_value)
         split_summary = split.summary()
         assessment = assess_run(
             self.config,
@@ -222,7 +223,7 @@ class TreehouseLabRunner:
         result = ExperimentResult(
             name=mutation_name,
             backend=backend,
-            metric=metrics[self.config.primary_metric],
+            metric=primary_metric_value,
             promoted=promoted,
             notes=decision_reason,
             run_id=run_id,
@@ -243,6 +244,17 @@ class TreehouseLabRunner:
         )
         self._record_journal(result)
         return result
+
+    def _primary_metric_value(self, metrics: dict[str, float], task_kind: str) -> float:
+        if self.config.primary_metric in metrics:
+            return metrics[self.config.primary_metric]
+
+        available_metrics = ", ".join(sorted(metrics))
+        msg = (
+            f"Primary metric '{self.config.primary_metric}' is not available for task '{task_kind}'. "
+            f"Available metrics: {available_metrics}."
+        )
+        raise ValueError(msg)
 
     def _resolve_model_params(
         self,

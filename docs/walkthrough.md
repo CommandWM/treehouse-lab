@@ -16,7 +16,7 @@ The current product surface is:
 - dataset-first intake
 - bounded XGBoost-first baseline / diagnose / propose / loop flow
 - React workbench for intake, current state, journal, settings, and architecture
-- optional compare harness against plain XGBoost and AutoGluon
+- optional compare harness against plain XGBoost, AutoGluon, and FLAML
 
 This is not a hosted platform or a broad AutoML suite. The point is to make tabular autoresearch bounded and reviewable.
 
@@ -169,6 +169,7 @@ That report should help answer:
 
 - how Treehouse compares to a plain XGBoost anchor
 - whether AutoGluon wins the one-shot benchmark
+- whether FLAML wins the lightweight budgeted AutoML benchmark
 - whether Treehouse adds value through bounded iteration, artifact trail, and LLM-guided next-step reasoning
 
 ## Screens

@@ -145,10 +145,10 @@ TREEHOUSE_LAB_LOOP_LLM_SELECTION=true \
 Run the fixed public benchmark suite contract:
 
 ```bash
-treehouse-lab benchmark-suite configs/benchmark_suites/public_v1_3.yaml --skip-autogluon
+treehouse-lab benchmark-suite configs/benchmark_suites/public_v1_3.yaml --skip-autogluon --skip-flaml
 ```
 
-Remove `--skip-autogluon` when you are using the benchmark environment from `./scripts/setup_benchmark_env.sh`.
+Remove `--skip-autogluon --skip-flaml` when you are using the benchmark environment from `./scripts/setup_benchmark_env.sh`.
 
 Run the new public dataset probes directly:
 
@@ -283,12 +283,13 @@ Treehouse Lab currently exposes four core commands:
 - `treehouse-lab compare <config>`: run a side-by-side comparison harness across plain XGBoost, Treehouse Lab, and optional external AutoML runners
   Use `--llm-summary` to ask the configured provider to synthesize where Treehouse Lab adds product value beyond raw metric comparison.
   The default AutoGluon mode is `--autogluon-profile practical`, which keeps the benchmark rerunnable instead of turning it into a long opaque sweep.
+  The default FLAML mode uses a small `xgboost,rf,extra_tree` estimator list and the same validation holdout, so it stays an external benchmark rather than a new core learner surface.
 - `treehouse-lab benchmark-suite <suite>`: run a fixed suite of dataset comparison configs and write one summary across all dataset reports
 - `treehouse-lab export <config>`: package the incumbent as a reusable model artifact with optional scoring and container wrappers
 
 The important distinction is that `diagnose`, `propose`, and `loop` do not freestyle. They operate inside explicit mutation templates and the declared search space in `configs/search_space.yaml`.
 
-`compare` is intentionally separate from the core loop. It uses the same dataset config and split policy, but it exists to benchmark Treehouse Lab against external baselines such as plain XGBoost and optional AutoGluon rather than to widen the product's core learner surface.
+`compare` is intentionally separate from the core loop. It uses the same dataset config and split policy, but it exists to benchmark Treehouse Lab against external baselines such as plain XGBoost and optional AutoML runners rather than to widen the product's core learner surface.
 
 ## Exporting a model
 

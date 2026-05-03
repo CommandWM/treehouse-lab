@@ -742,6 +742,33 @@ select {
   grid-column: 1 / -1;
 }
 
+.file-picker-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.65rem;
+  align-items: center;
+}
+
+.file-picker-button {
+  position: relative;
+  min-height: 44px;
+  white-space: nowrap;
+}
+
+.file-picker-button.is-disabled {
+  opacity: 0.58;
+  pointer-events: none;
+}
+
+.file-picker-input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: pointer;
+}
+
 .form-actions {
   display: flex;
   gap: 0.65rem;
@@ -818,6 +845,7 @@ select {
 
   .hero,
   .intake-grid,
+  .file-picker-row,
   .assessment-grid,
   .flow-grid,
   .signal-grid,

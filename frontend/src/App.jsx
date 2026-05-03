@@ -100,7 +100,7 @@ const intakeDefaults = {
   name: "",
   configKey: "",
   description: "",
-  primaryMetric: "roc_auc",
+  primaryMetric: "",
   objective: "",
   validationSize: "0.2",
   testSize: "0.2",
@@ -285,6 +285,35 @@ function App() {
       name: current.name || suggestion.name,
       configKey: current.configKey || suggestion.key,
     }));
+  }
+
+  async function handleUploadDatasetFile(event) {
+    const file = event.target.files?.[0];
+    if (!file) {
+      return;
+    }
+    setIntakeBusy("upload");
+    setError("");
+    try {
+      const payload = await fetchJson(`/api/intake/upload?filename=${encodeURIComponent(file.name)}`, {
+        method: "POST",
+        headers: { "Content-Type": file.type || "text/csv" },
+        body: file,
+      });
+      const suggestion = suggestDatasetIdentity(payload.path);
+      setIntakeForm((current) => ({
+        ...current,
+        path: payload.path,
+        name: current.name || suggestion.name,
+        configKey: current.configKey || suggestion.key,
+      }));
+      setIntakePreview(null);
+    } catch (actionError) {
+      setError(String(actionError.message || actionError));
+    } finally {
+      event.target.value = "";
+      setIntakeBusy("");
+    }
   }
 
   async function handleInspectDataset() {
@@ -710,6 +739,7 @@ function App() {
           selectedConfig,
           updateIntakeField,
           updateLlmSettingsField,
+          handleUploadDatasetFile,
           handleInspectDataset,
           createDatasetConfig,
           setAdvisorQuestion,
@@ -753,6 +783,7 @@ function renderActiveView(context) {
     selectedConfig,
     updateIntakeField,
     updateLlmSettingsField,
+    handleUploadDatasetFile,
     handleInspectDataset,
     createDatasetConfig,
     setAdvisorQuestion,
@@ -774,14 +805,27 @@ function renderActiveView(context) {
               Treehouse Lab write the dataset spec for you.
             </p>
             <div className="intake-grid">
-              <label className="field">
-                <span>CSV path</span>
-                <input
-                  value={intakeForm.path}
-                  onChange={(event) => updateIntakeField("path", event.target.value)}
-                  placeholder="custom_datasets/my_dataset.csv"
-                />
-              </label>
+              <div className="field field--full">
+                <span>CSV file</span>
+                <div className="file-picker-row">
+                  <input
+                    aria-label="CSV path"
+                    value={intakeForm.path}
+                    onChange={(event) => updateIntakeField("path", event.target.value)}
+                    placeholder="custom_datasets/my_dataset.csv"
+                  />
+                  <label className={`action-button file-picker-button${intakeBusy !== "" ? " is-disabled" : ""}`}>
+                    {intakeBusy === "upload" ? "Uploading..." : "Choose CSV"}
+                    <input
+                      className="file-picker-input"
+                      type="file"
+                      accept=".csv,text/csv"
+                      onChange={handleUploadDatasetFile}
+                      disabled={intakeBusy !== ""}
+                    />
+                  </label>
+                </div>
+              </div>
               <label className="field">
                 <span>Target column</span>
                 <input
@@ -812,9 +856,10 @@ function renderActiveView(context) {
                   value={intakeForm.primaryMetric}
                   onChange={(event) => updateIntakeField("primaryMetric", event.target.value)}
                 >
+                  <option value="">Auto</option>
                   <option value="roc_auc">roc_auc</option>
-                  <option value="validation_accuracy">validation_accuracy</option>
-                  <option value="validation_log_loss">validation_log_loss</option>
+                  <option value="accuracy">accuracy</option>
+                  <option value="macro_f1">macro_f1</option>
                 </select>
               </label>
               <label className="field">

@@ -9,6 +9,7 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
 
+from treehouse_lab.grounding import build_advisor_grounding
 from treehouse_lab.runtime_settings import effective_llm_settings, load_llm_settings
 
 try:
@@ -23,7 +24,7 @@ except ImportError:  # pragma: no cover - optional at runtime
 
 DEFAULT_ADVISOR_PROVIDER = "ollama"
 DEFAULT_ADVISOR_QUESTION = "What should I do next and why?"
-DEFAULT_COMPARISON_QUESTION = "Where does Treehouse Lab add value beyond AutoGluon and plain baselines, and what should we do next?"
+DEFAULT_COMPARISON_QUESTION = "Where does Treehouse Lab add value beyond AutoGluon, FLAML, and plain baselines, and what should we do next?"
 DEFAULT_OLLAMA_MODEL = "gemma3:4b"
 DEFAULT_OLLAMA_BASE_URL = "http://localhost:11434"
 OLLAMA_API_KEY_ENV_VARS = ("OLLAMA_API_KEY", "OLLAMA_CLOUD_KEY", "VIOLAAMA_CLOUD_KEY")
@@ -528,7 +529,7 @@ def _developer_prompt() -> str:
         "Rules:\n"
         "- Never recommend actions outside the declared mutation templates or search space.\n"
         "- Never suggest touching the held-out test set or silently changing split policy.\n"
-        "- Ground every recommendation in the provided metrics, diagnosis, proposal, and recent journal history.\n"
+        "- Ground every recommendation in the provided metrics, diagnosis, proposal, recent journal history, and bounded local references.\n"
         "- If the recent history shows repeated rejected mutation families or diminishing deltas, say so plainly.\n"
         "- Keep the answer concise and auditable.\n"
         "- Use exactly these sections and labels:\n"
@@ -545,6 +546,7 @@ def _proposal_selection_system_prompt() -> str:
         "Rules:\n"
         "- Only select from the candidate proposal_ids provided.\n"
         "- Never invent a new mutation, parameter, or feature-generation step.\n"
+        "- Use each candidate's bounded local grounding references as constraints, not as permission to widen the search.\n"
         "- Prefer small, attributable changes that fit the diagnosis and recent history.\n"
         "- If recent runs repeated a family without beating the promotion threshold, say that clearly.\n"
         "- Output strict JSON only, no markdown fences.\n"
@@ -558,7 +560,7 @@ def _comparison_summary_system_prompt() -> str:
         "Explain the outcome using only the supplied comparison context.\n"
         "Rules:\n"
         "- Separate metric results from product-operating advantages like artifacts, journals, bounded next steps, and guided reasoning.\n"
-        "- If AutoGluon is present, explain what Treehouse adds beyond one-shot AutoML, especially around bounded next-step choice and LLM-guided iteration.\n"
+        "- If AutoGluon or FLAML is present, explain what Treehouse adds beyond one-shot AutoML, especially around bounded next-step choice and LLM-guided iteration.\n"
         "- Never claim a metric win when the metrics are tied or worse.\n"
         "- If an external benchmark is unavailable, say that plainly instead of guessing.\n"
         "- Do not recommend widening the learner surface beyond the supplied runners.\n"
@@ -592,15 +594,7 @@ def _comparison_summary_user_prompt(context: dict[str, Any], question: str) -> s
 
 
 def _build_grounding(context: dict[str, Any]) -> dict[str, Any]:
-    recent_entries = list(context.get("recent_entries", []))
-    recent_mutations = [entry.get("name") for entry in recent_entries if entry.get("name")]
-    return {
-        "dataset_key": context.get("dataset_key"),
-        "journal_count": context.get("journal_count", len(recent_entries)),
-        "recent_mutations": recent_mutations,
-        "diagnosis_tag": context.get("diagnosis_preview", {}).get("diagnosis", {}).get("primary_tag")
-        or context.get("diagnosis", {}).get("primary_tag"),
-    }
+    return build_advisor_grounding(context)
 
 
 def _project_root_from_context(context: dict[str, Any]) -> str:

@@ -15,6 +15,7 @@ import yaml
 from treehouse_lab.config import ExperimentConfig
 from treehouse_lab.datasets import DatasetBundle, DatasetSplit, load_dataset, split_dataset
 from treehouse_lab.evaluation import RunAssessment, assess_run
+from treehouse_lab.grounding import summarize_step_grounding
 from treehouse_lab.llm import generate_comparison_summary
 from treehouse_lab.loop import AutonomousLoopController
 from treehouse_lab.runner import TreehouseLabRunner
@@ -23,6 +24,8 @@ DEFAULT_AUTOGLUON_PROFILE = "practical"
 PRACTICAL_AUTOGLUON_PRESETS = ["medium_quality", "optimize_for_deployment"]
 PRACTICAL_AUTOGLUON_EXCLUDED_MODEL_TYPES = ["KNN", "NN_TORCH", "FASTAI", "AG_AUTOMM"]
 PRACTICAL_AUTOGLUON_TIME_LIMIT_SECONDS = 30
+PRACTICAL_FLAML_ESTIMATOR_LIST = ["xgboost", "rf", "extra_tree"]
+PRACTICAL_FLAML_TIME_BUDGET_SECONDS = 30
 
 
 @dataclass(slots=True)
@@ -71,17 +74,28 @@ class AutoGluonRunnerConfig:
     notes: list[str] = field(default_factory=list)
 
 
+@dataclass(slots=True)
+class FLAMLRunnerConfig:
+    time_budget: int
+    estimator_list: list[str]
+    display_name: str = "FLAML AutoML (Practical)"
+    notes: list[str] = field(default_factory=list)
+
+
 def run_comparison_suite(
     config_path: str | Path,
     *,
     output_dir: str | Path | None = None,
     loop_steps: int = 3,
     include_autogluon: bool = True,
+    include_flaml: bool = True,
     include_llm_summary: bool = False,
     llm_question: str | None = None,
     autogluon_profile: str = DEFAULT_AUTOGLUON_PROFILE,
     autogluon_presets: str | list[str] | None = None,
     autogluon_time_limit: int | None = None,
+    flaml_time_budget: int | None = None,
+    flaml_estimator_list: str | list[str] | None = None,
 ) -> ComparisonSuiteResult:
     base_runner = TreehouseLabRunner(config_path)
     config = base_runner.config
@@ -112,6 +126,22 @@ def run_comparison_suite(
                 split,
                 runners_dir / "autogluon_tabular",
                 runner_config=autogluon_runner_config,
+            )
+        )
+
+    if include_flaml:
+        flaml_runner_config = _resolve_flaml_runner_config(
+            base_runner.config,
+            time_budget=flaml_time_budget,
+            estimator_list=flaml_estimator_list,
+        )
+        run_summaries.append(
+            _run_flaml(
+                base_runner,
+                dataset,
+                split,
+                runners_dir / "flaml_automl",
+                runner_config=flaml_runner_config,
             )
         )
 
@@ -270,6 +300,7 @@ def _run_treehouse_loop(
     details["promotion_count"] = len(promoted_steps)
     llm_guidance = _summarize_loop_llm_guidance(step_results)
     details.update(llm_guidance)
+    details["proposal_grounding"] = summarize_step_grounding(step_results)
     _write_runner_outputs(
         runner_dir,
         summary=details,
@@ -458,6 +489,153 @@ def _run_autogluon(
     )
 
 
+def _run_flaml(
+    base_runner: TreehouseLabRunner,
+    dataset: DatasetBundle,
+    split: DatasetSplit,
+    runner_dir: Path,
+    *,
+    runner_config: FLAMLRunnerConfig,
+) -> ComparisonRunSummary:
+    runner_dir.mkdir(parents=True, exist_ok=True)
+    try:
+        flaml_module = importlib.import_module("flaml")
+    except ModuleNotFoundError:
+        details = {
+            "install_hint": "Install FLAML separately and rerun compare to include this external benchmark.",
+            "requested_time_budget": runner_config.time_budget,
+            "estimator_list": runner_config.estimator_list,
+        }
+        _write_runner_outputs(runner_dir, summary=details, notes=["FLAML is not installed in the current environment."])
+        return ComparisonRunSummary(
+            runner_key="flaml_automl",
+            display_name=runner_config.display_name,
+            status="unavailable",
+            backend="flaml",
+            validation_metric=None,
+            test_metric=None,
+            runtime_seconds=None,
+            benchmark_status=None,
+            implementation_readiness=None,
+            artifact_path=str(runner_dir),
+            notes=[
+                "Optional external benchmark runner.",
+                "Unavailable because FLAML is not installed in this environment.",
+            ],
+            workflow_traits={
+                "search_style": "opaque_automl",
+                "artifact_trail": "fit_log_only",
+                "journal": "no",
+                "bounded_next_step": "no",
+                "llm_guidance": "no",
+            },
+            details=details,
+        )
+
+    AutoML = getattr(flaml_module, "AutoML")
+    automl = AutoML()
+    log_file_path = runner_dir / "flaml.log"
+    fit_kwargs = _build_flaml_fit_kwargs(
+        base_runner=base_runner,
+        dataset=dataset,
+        split=split,
+        runner_config=runner_config,
+        log_file_path=log_file_path,
+    )
+    run_started = time.perf_counter()
+    try:
+        automl.fit(**fit_kwargs)
+    except Exception as exc:  # pragma: no cover - depends on external FLAML runtime
+        runtime_seconds = time.perf_counter() - run_started
+        details = {
+            "time_budget": runner_config.time_budget,
+            "estimator_list": runner_config.estimator_list,
+            "log_file_path": str(log_file_path),
+            "error_message": str(exc),
+        }
+        _write_runner_outputs(
+            runner_dir,
+            summary=details,
+            notes=[
+                *runner_config.notes,
+                "FLAML failed inside the external benchmark harness.",
+            ],
+        )
+        return ComparisonRunSummary(
+            runner_key="flaml_automl",
+            display_name=runner_config.display_name,
+            status="error",
+            backend="flaml",
+            validation_metric=None,
+            test_metric=None,
+            runtime_seconds=runtime_seconds,
+            benchmark_status=None,
+            implementation_readiness=None,
+            artifact_path=str(runner_dir),
+            notes=[
+                *runner_config.notes,
+                f"FLAML benchmark failed: {exc}",
+            ],
+            workflow_traits={
+                "search_style": "opaque_automl",
+                "artifact_trail": "fit_log_only",
+                "journal": "no",
+                "bounded_next_step": "no",
+                "llm_guidance": "no",
+            },
+            details=details,
+        )
+
+    runtime_seconds = time.perf_counter() - run_started
+    adapter = _FLAMLAutoMLAdapter(automl)
+    metrics = base_runner._compute_metrics(adapter, split, task_kind=str(dataset.target_profile["task_kind"]))  # noqa: SLF001
+    assessment = _baseline_style_assessment(base_runner.config, metrics, split.summary(), runtime_seconds)
+    details = {
+        "metrics": metrics,
+        "assessment": assessment.to_dict(),
+        "best_estimator": getattr(automl, "best_estimator", None),
+        "best_config": _json_safe(getattr(automl, "best_config", {})),
+        "best_loss": _json_safe(getattr(automl, "best_loss", None)),
+        "best_iteration": _json_safe(getattr(automl, "best_iteration", None)),
+        "time_budget": runner_config.time_budget,
+        "estimator_list": runner_config.estimator_list,
+        "log_file_path": str(log_file_path),
+    }
+    _write_runner_outputs(
+        runner_dir,
+        summary=details,
+        notes=[
+            "Comparison harness passes the same validation split as FLAML X_val/y_val with holdout evaluation.",
+            "FLAML chooses among the configured estimator list internally, so it remains an external automation benchmark.",
+        ],
+    )
+    return ComparisonRunSummary(
+        runner_key="flaml_automl",
+        display_name=runner_config.display_name,
+        status="completed",
+        backend="flaml",
+        validation_metric=float(metrics[base_runner.config.primary_metric]),
+        test_metric=float(metrics.get(f"test_{base_runner.config.primary_metric}", metrics.get("test_accuracy", 0.0))),
+        runtime_seconds=runtime_seconds,
+        benchmark_status=assessment.benchmark_status,
+        implementation_readiness=assessment.implementation_readiness,
+        artifact_path=str(runner_dir),
+        notes=[
+            *runner_config.notes,
+            f"Ran with estimator_list `{runner_config.estimator_list}` and time_budget `{runner_config.time_budget}` seconds.",
+            "Useful as a lightweight external AutoML benchmark, but its search path is less explicit than Treehouse Lab.",
+        ],
+        workflow_traits={
+            "search_style": "opaque_automl",
+            "artifact_trail": "fit_log_only",
+            "journal": "no",
+            "bounded_next_step": "no",
+            "llm_guidance": "no",
+        },
+        details=details,
+    )
+
+
 def _render_report(
     *,
     base_runner: TreehouseLabRunner,
@@ -532,6 +710,8 @@ def _render_report(
         )
 
     lines.extend(_render_feature_generation_decisions(run_summaries))
+    lines.extend(_render_bounded_research_grounding(run_summaries))
+    lines.extend(_render_cycle_guard_decisions(run_summaries))
 
     lines.extend(
         [
@@ -546,6 +726,7 @@ def _render_report(
             "- `treehouse_lab_baseline` shows what you gain immediately from the product: artifacts, policy checks, and a reusable incumbent.",
             f"- `treehouse_lab_loop` shows the product layer: bounded next-step selection, journaling, and narrative attached to execution over {loop_steps} steps.",
             "- `autogluon_tabular` is an external automation benchmark. It is useful for raw automation comparison, not as the center of the Treehouse Lab product shape.",
+            "- `flaml_automl` is a lightweight external AutoML benchmark. It is useful for a budgeted automation check, not as a new core learner surface.",
         ]
     )
     if llm_summary is not None:
@@ -697,6 +878,70 @@ def _render_feature_generation_detail_lines(decisions: list[dict[str, Any]]) -> 
     return lines
 
 
+def _render_bounded_research_grounding(run_summaries: list[ComparisonRunSummary]) -> list[str]:
+    rows: list[dict[str, Any]] = []
+    for run_summary in run_summaries:
+        grounding_rows = run_summary.details.get("proposal_grounding") or summarize_step_grounding(
+            run_summary.details.get("steps", [])
+        )
+        for grounding in grounding_rows:
+            rows.append({"runner": run_summary.display_name, **grounding})
+
+    if not rows:
+        return []
+
+    lines = [
+        "",
+        "## Bounded research grounding",
+        "",
+        "- Each listed Treehouse proposal carries local references and measured evidence that constrain any LLM explanation or selection.",
+        "",
+        "| runner | mutation | scope | references | evidence |",
+        "| --- | --- | --- | --- | --- |",
+    ]
+    for row in rows:
+        references = ", ".join(row.get("reference_paths", [])) or "n/a"
+        evidence = ", ".join(row.get("evidence_names", [])) or "n/a"
+        lines.append(
+            f"| {row['runner']} | {row.get('mutation_type', 'n/a')} | {row.get('scope', 'n/a')} | {references} | {evidence} |"
+        )
+    return lines
+
+
+def _render_cycle_guard_decisions(run_summaries: list[ComparisonRunSummary]) -> list[str]:
+    rows: list[dict[str, str]] = []
+    for run_summary in run_summaries:
+        for step in run_summary.details.get("steps", []):
+            proposal = step.get("proposal", {}) if isinstance(step, dict) else {}
+            cycle_guard = proposal.get("cycle_guard", {}) if isinstance(proposal, dict) else {}
+            if cycle_guard.get("triggered"):
+                rows.append(
+                    {
+                        "runner": run_summary.display_name,
+                        "blocked_mutation_type": str(cycle_guard.get("blocked_mutation_type") or "n/a"),
+                        "fallback_mutation_type": str(cycle_guard.get("fallback_mutation_type") or "n/a"),
+                        "reason": str(cycle_guard.get("reason") or "n/a"),
+                    }
+                )
+    if not rows:
+        return []
+
+    lines = [
+        "",
+        "## Weak-cycle fallback guard",
+        "",
+        "- Triggered guards mean the loop detected repeated weak attempts from a mutation family and forced a different bounded next step when available.",
+        "",
+        "| runner | triggered | blocked mutation | fallback mutation | reason |",
+        "| --- | --- | --- | --- | --- |",
+    ]
+    for row in rows:
+        lines.append(
+            f"| {row['runner']} | yes | {row['blocked_mutation_type']} | {row['fallback_mutation_type']} | {row['reason']} |"
+        )
+    return lines
+
+
 def _yes_no(value: bool) -> str:
     return "yes" if value else "no"
 
@@ -742,6 +987,23 @@ def _resolve_autogluon_runner_config(
     raise ValueError(msg)
 
 
+def _resolve_flaml_runner_config(
+    config: ExperimentConfig,
+    *,
+    time_budget: int | None,
+    estimator_list: str | list[str] | None,
+) -> FLAMLRunnerConfig:
+    requested_time_budget = int(config.evaluation_policy.max_runtime_seconds or config.max_runtime_minutes * 60)
+    return FLAMLRunnerConfig(
+        time_budget=time_budget or min(requested_time_budget, PRACTICAL_FLAML_TIME_BUDGET_SECONDS),
+        estimator_list=_normalize_flaml_estimator_list(estimator_list) or list(PRACTICAL_FLAML_ESTIMATOR_LIST),
+        notes=[
+            "Uses a small estimator list for a rerunnable lightweight AutoML reference.",
+            "Keeps FLAML outside the core Treehouse loop so the product search space stays explicit.",
+        ],
+    )
+
+
 def _normalize_autogluon_presets(presets: str | list[str] | None) -> str | list[str] | None:
     if presets is None:
         return None
@@ -754,6 +1016,16 @@ def _normalize_autogluon_presets(presets: str | list[str] | None) -> str | list[
     if len(parts) == 1:
         return parts[0]
     return parts
+
+
+def _normalize_flaml_estimator_list(estimator_list: str | list[str] | None) -> list[str] | None:
+    if estimator_list is None:
+        return None
+    if isinstance(estimator_list, list):
+        normalized = [str(item).strip() for item in estimator_list if str(item).strip()]
+        return normalized or None
+    normalized = [part.strip() for part in str(estimator_list).split(",") if part.strip()]
+    return normalized or None
 
 
 def _build_autogluon_fit_kwargs(
@@ -774,6 +1046,32 @@ def _build_autogluon_fit_kwargs(
     if runner_config.excluded_model_types:
         fit_kwargs["excluded_model_types"] = runner_config.excluded_model_types
     return fit_kwargs
+
+
+def _build_flaml_fit_kwargs(
+    *,
+    base_runner: TreehouseLabRunner,
+    dataset: DatasetBundle,
+    split: DatasetSplit,
+    runner_config: FLAMLRunnerConfig,
+    log_file_path: Path,
+) -> dict[str, Any]:
+    return {
+        "X_train": split.X_train,
+        "y_train": split.y_train,
+        "X_val": split.X_val,
+        "y_val": split.y_val,
+        "task": _flaml_task(str(dataset.target_profile["task_kind"])),
+        "metric": _flaml_eval_metric(base_runner.config.primary_metric, str(dataset.target_profile["task_kind"])),
+        "time_budget": runner_config.time_budget,
+        "estimator_list": runner_config.estimator_list,
+        "eval_method": "holdout",
+        "retrain_full": False,
+        "log_file_name": str(log_file_path),
+        "seed": base_runner.config.seed,
+        "verbose": 0,
+        "mlflow_logging": False,
+    }
 
 
 def _build_comparison_llm_context(
@@ -822,8 +1120,12 @@ def _llm_safe_runner_details(run_summary: ComparisonRunSummary) -> dict[str, Any
             "final_metric": run_summary.details.get("final_incumbent", {}).get("metric"),
             "llm_guided_step_count": run_summary.details.get("llm_guided_step_count"),
             "llm_reviewed_step_count": run_summary.details.get("llm_reviewed_step_count"),
+            "llm_changed_selection_count": run_summary.details.get("llm_changed_selection_count"),
+            "llm_changed_mutation_type_count": run_summary.details.get("llm_changed_mutation_type_count"),
             "llm_guidance_statuses": run_summary.details.get("llm_guidance_statuses"),
             "llm_provider": run_summary.details.get("llm_provider"),
+            "proposal_grounding": run_summary.details.get("proposal_grounding")
+            or summarize_step_grounding(run_summary.details.get("steps", [])),
         }
     if run_summary.runner_key == "autogluon_tabular":
         return {
@@ -831,6 +1133,13 @@ def _llm_safe_runner_details(run_summary: ComparisonRunSummary) -> dict[str, Any
             "requested_presets": run_summary.details.get("requested_presets") or run_summary.details.get("presets"),
             "requested_time_limit": run_summary.details.get("requested_time_limit") or run_summary.details.get("time_limit"),
             "excluded_model_types": run_summary.details.get("excluded_model_types"),
+            "install_hint": run_summary.details.get("install_hint"),
+        }
+    if run_summary.runner_key == "flaml_automl":
+        return {
+            "best_estimator": run_summary.details.get("best_estimator"),
+            "requested_time_budget": run_summary.details.get("requested_time_budget") or run_summary.details.get("time_budget"),
+            "estimator_list": run_summary.details.get("estimator_list"),
             "install_hint": run_summary.details.get("install_hint"),
         }
     return {
@@ -847,6 +1156,8 @@ def _summarize_loop_llm_guidance(step_results: list[dict[str, Any]]) -> dict[str
         if isinstance(review, dict) and review.get("status"):
             reviews.append(review)
     guided_reviews = [review for review in reviews if review.get("status") == "available"]
+    changed_reviews = [review for review in guided_reviews if review.get("selection_changed") is True]
+    changed_mutation_reviews = [review for review in guided_reviews if review.get("mutation_type_changed") is True]
     provider = None
     if guided_reviews:
         provider = guided_reviews[0].get("provider")
@@ -856,6 +1167,15 @@ def _summarize_loop_llm_guidance(step_results: list[dict[str, Any]]) -> dict[str
     return {
         "llm_guided_step_count": len(guided_reviews),
         "llm_reviewed_step_count": len(reviews),
+        "llm_changed_selection_count": len(changed_reviews),
+        "llm_changed_mutation_type_count": len(changed_mutation_reviews),
+        "llm_selection_changes": [
+            {
+                "deterministic_mutation_type": str(review.get("deterministic_mutation_type")),
+                "selected_mutation_type": str(review.get("selected_mutation_type")),
+            }
+            for review in changed_reviews
+        ],
         "llm_guidance_statuses": statuses,
         "llm_provider": provider,
     }
@@ -867,13 +1187,15 @@ def _format_loop_llm_guidance_note(llm_guidance: dict[str, Any]) -> str:
     provider = llm_guidance.get("llm_provider")
     if reviewed_step_count == 0:
         return "LLM-guided candidate selection was not used; Treehouse relied on deterministic candidate ranking."
+    changed_count = int(llm_guidance.get("llm_changed_selection_count", 0))
     provider_suffix = f" via `{provider}`" if provider else ""
-    return f"LLM-guided candidate selections: {guided_step_count}/{reviewed_step_count}{provider_suffix}."
+    return f"LLM-guided candidate selections: {guided_step_count}/{reviewed_step_count}{provider_suffix}; changed deterministic top choice {changed_count} time(s)."
 
 
 def _render_practical_takeaway(run_summaries: list[ComparisonRunSummary]) -> list[str]:
     lines = [
         "- `autogluon_tabular` answers the one-shot automation question: what can a practical external AutoML pass produce on this split?",
+        "- `flaml_automl` answers the lightweight AutoML question: what can a smaller budgeted search produce on the same split?",
         "- Treehouse Lab answers the operating question: what bounded move should come next, why, and what evidence justifies it?",
     ]
     autogluon_summary = next((summary for summary in run_summaries if summary.runner_key == "autogluon_tabular"), None)
@@ -883,11 +1205,20 @@ def _render_practical_takeaway(run_summaries: list[ComparisonRunSummary]) -> lis
             lines.append(f"- AutoGluon ran in the `{profile}` profile so the benchmark stays practical enough to rerun.")
         elif autogluon_summary.status == "unavailable":
             lines.append("- AutoGluon was unavailable in this environment, so the practical comparison is Treehouse Lab versus a plain XGBoost anchor.")
+    flaml_summary = next((summary for summary in run_summaries if summary.runner_key == "flaml_automl"), None)
+    if flaml_summary is not None:
+        if flaml_summary.status == "completed":
+            time_budget = flaml_summary.details.get("time_budget", "unknown")
+            lines.append(f"- FLAML ran with a `{time_budget}` second budget, keeping the lightweight AutoML comparison bounded.")
+        elif flaml_summary.status == "unavailable":
+            lines.append("- FLAML was unavailable in this environment, so rerun from the benchmark environment for the lightweight AutoML reference.")
     loop_summary = next((summary for summary in run_summaries if summary.runner_key == "treehouse_lab_loop"), None)
     if loop_summary is None:
         return lines
     llm_guided_step_count = int(loop_summary.details.get("llm_guided_step_count", 0) or 0)
     llm_reviewed_step_count = int(loop_summary.details.get("llm_reviewed_step_count", 0) or 0)
+    llm_changed_selection_count = int(loop_summary.details.get("llm_changed_selection_count", 0) or 0)
+    llm_changed_mutation_type_count = int(loop_summary.details.get("llm_changed_mutation_type_count", 0) or 0)
     provider = loop_summary.details.get("llm_provider")
     if llm_reviewed_step_count == 0:
         lines.append("- The Treehouse loop stayed deterministic in this run, so the product difference is audit trail and bounded search rather than LLM-guided selection.")
@@ -895,6 +1226,9 @@ def _render_practical_takeaway(run_summaries: list[ComparisonRunSummary]) -> lis
     provider_suffix = f" via `{provider}`" if provider else ""
     lines.append(
         f"- The Treehouse loop used LLM guidance on {llm_guided_step_count}/{llm_reviewed_step_count} bounded candidate choices{provider_suffix}, which is the key layer beyond plain AutoGluon."
+    )
+    lines.append(
+        f"- The LLM changed the deterministic top choice on {llm_changed_selection_count}/{llm_guided_step_count} bounded selections and changed mutation family on {llm_changed_mutation_type_count} step(s)."
     )
     return lines
 
@@ -964,6 +1298,29 @@ def _autogluon_eval_metric(primary_metric: str) -> str | None:
     return primary_metric if primary_metric in supported_metrics else None
 
 
+def _flaml_task(task_kind: str) -> str:
+    if task_kind in {"binary_classification", "multiclass_classification"}:
+        return "classification"
+    return "classification"
+
+
+def _flaml_eval_metric(primary_metric: str, task_kind: str) -> str:
+    if primary_metric == "roc_auc" and task_kind == "multiclass_classification":
+        return "roc_auc_ovr"
+    supported_metrics = {"roc_auc", "accuracy", "log_loss", "f1", "micro_f1", "macro_f1"}
+    return primary_metric if primary_metric in supported_metrics else "auto"
+
+
+def _json_safe(value: Any) -> Any:
+    if isinstance(value, dict):
+        return {str(key): _json_safe(item) for key, item in value.items()}
+    if isinstance(value, list | tuple):
+        return [_json_safe(item) for item in value]
+    if isinstance(value, np.generic):
+        return value.item()
+    return value
+
+
 class _AutoGluonPredictorAdapter:
     def __init__(self, predictor: Any):
         self.predictor = predictor
@@ -976,6 +1333,27 @@ class _AutoGluonPredictorAdapter:
 
     def predict_proba(self, frame: pd.DataFrame) -> np.ndarray:
         probabilities = self.predictor.predict_proba(frame)
+        if hasattr(probabilities, "to_numpy"):
+            values = np.asarray(probabilities.to_numpy())
+        else:
+            values = np.asarray(probabilities)
+        if values.ndim == 1:
+            values = np.column_stack([1 - values, values])
+        return values.astype(float)
+
+
+class _FLAMLAutoMLAdapter:
+    def __init__(self, automl: Any):
+        self.automl = automl
+
+    def predict(self, frame: pd.DataFrame) -> np.ndarray:
+        predictions = self.automl.predict(frame)
+        if hasattr(predictions, "to_numpy"):
+            return np.asarray(predictions.to_numpy(), dtype=int)
+        return np.asarray(predictions, dtype=int)
+
+    def predict_proba(self, frame: pd.DataFrame) -> np.ndarray:
+        probabilities = self.automl.predict_proba(frame)
         if hasattr(probabilities, "to_numpy"):
             values = np.asarray(probabilities.to_numpy())
         else:
