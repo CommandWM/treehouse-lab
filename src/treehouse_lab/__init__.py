@@ -1,7 +1,7 @@
 """Treehouse Lab."""
 
 __all__ = ["__version__", "ExperimentResult", "TreehouseLabRunner"]
-__version__ = "1.0.1"
+__version__ = "1.1.0"
 
 
 def __getattr__(name: str):

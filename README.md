@@ -9,15 +9,17 @@
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green.svg" alt="MIT License" /></a>
 </p>
 
-Treehouse Lab is a Karpathy-style autoresearch loop for tabular machine learning.
+Treehouse Lab is an audit-first workbench for tabular machine learning.
 
-Current checkpoint: `v1.1.0`. The repo now has a real end-to-end local workflow: dataset-first intake, bounded autoresearch loops, grounded LLM assistance, coach-triggered bounded execution, local settings for provider credentials, exportable model artifacts with optional container packaging, explicit binary or multiclass classification support for XGBoost-first experiments, and a capped train-only feature-generation branch for plateaued loops.
+Current checkpoint: `v1.1.0`. The repo now has a real end-to-end local workflow: dataset-first intake, bounded XGBoost-first experiments, grounded LLM assistance, coach-triggered bounded execution, local settings for provider credentials, explicit binary or multiclass classification support, benchmark comparisons, experiment journals, promotion policy, and exportable model bundles with optional container packaging.
 
-The idea is simple: give an agent a constrained playground around XGBoost-style models, let it propose experiments, run them safely, keep only the winners, and leave behind a readable research log instead of a pile of notebook debris.
+The practical goal is simple: bring a local tabular dataset into a reviewable experiment loop, run only bounded candidate changes, promote only meaningful improvements, and leave behind enough artifacts for another person to audit the result without digging through a notebook pile.
 
 ## Why this exists
 
-Karpathy's `autoresearch` pattern is brilliant, but it was built around small language model training loops. Tabular ML is a better first proving ground for most real teams:
+Treehouse Lab takes inspiration from Karpathy's `autoresearch` pattern: tight experiment loops, explicit search, and readable evidence after each run. The core product is narrower and more practical: an XGBoost-first lab for dataset intake, bounded mutation, incumbent promotion, journaled decisions, benchmark comparison, and model export.
+
+Tabular ML is a better first proving ground for most real teams:
 
 - experiments are cheaper
 - metrics are clearer
@@ -29,7 +31,7 @@ Treehouse Lab is aimed at that gap.
 
 ## Design principles
 
-- **Constrained search beats chaos.** The agent should mutate within a safe, explicit search space.
+- **Constrained search beats chaos.** Candidate experiments should mutate within a safe, explicit search space.
 - **Evaluation is sacred.** No leakage, no test-set gaming, no notebook nonsense.
 - **Promotion must be earned.** A run only wins if it beats the incumbent under the agreed metric and guardrails.
 - **Every run tells a story.** Outputs should be understandable by a human reviewing them later.
@@ -68,7 +70,7 @@ Later work should deepen the XGBoost-first loop with stronger benchmarks, richer
 ## Core loop
 
 1. Train a strong baseline.
-2. Let the agent propose one mutation.
+2. Propose one bounded mutation.
 3. Run guarded evaluation.
 4. Compare against the incumbent.
 5. Promote only meaningful improvements.

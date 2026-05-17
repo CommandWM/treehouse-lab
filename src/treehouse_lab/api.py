@@ -11,6 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 import yaml
 
+from treehouse_lab import __version__
 from treehouse_lab.config import load_experiment_config
 from treehouse_lab.datasets import inspect_classification_target
 from treehouse_lab.exporting import export_model_artifact
@@ -33,7 +34,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 DATASET_CONFIG_DIR = PROJECT_ROOT / "configs" / "datasets"
 GLOSSARY_PATH = PROJECT_ROOT / "docs" / "glossary.md"
 
-app = FastAPI(title="Treehouse Lab API", version="1.0.1")
+app = FastAPI(title="Treehouse Lab API", version=__version__)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],

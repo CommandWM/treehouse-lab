@@ -10,6 +10,8 @@ The useful question is not "does Treehouse Lab always beat every AutoML runner?"
 
 Use this page with the fixed public suite in `configs/benchmark_suites/public_v1_3.yaml`.
 
+For a concrete fill-in structure, use [Benchmark Report Example](benchmark-report-example.md). It shows where real suite results, runtime notes, promotion decisions, and implementation-readiness evidence should be inserted without fabricating benchmark numbers.
+
 ## Short Answer
 
 | Situation | Best fit | Why |
@@ -159,4 +161,3 @@ Before treating a benchmark result as publishable, confirm:
 - the writeup separates metric value, workflow value, and implementation readiness
 
 If any of those are missing, call the result a local probe rather than a benchmark report.
-

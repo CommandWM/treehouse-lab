@@ -10,6 +10,7 @@ from typing import Any
 
 import pandas as pd
 
+from treehouse_lab import __version__
 from treehouse_lab.config import load_experiment_config
 from treehouse_lab.datasets import FeaturePreprocessor, load_dataset, split_dataset, transform_feature_frame
 from treehouse_lab.journal import load_incumbent, load_run_entry
@@ -231,7 +232,7 @@ def _rebuild_legacy_bundle(project_root: Path, run_entry: dict[str, Any], bundle
 
 
 def _fastapi_app_template() -> str:
-    return textwrap.dedent(
+    template = textwrap.dedent(
         """
         from pathlib import Path
 
@@ -245,7 +246,7 @@ def _fastapi_app_template() -> str:
         BUNDLE_PATH = Path(__file__).resolve().parent / "model_bundle.pkl"
         bundle = load_exported_model_bundle(BUNDLE_PATH)
 
-        app = FastAPI(title="Treehouse Lab Exported Model", version="0.1.0")
+        app = FastAPI(title="Treehouse Lab Exported Model", version="__TREEHOUSE_LAB_VERSION__")
 
 
         class PredictRequest(BaseModel):
@@ -278,7 +279,8 @@ def _fastapi_app_template() -> str:
                 raise HTTPException(status_code=400, detail=str(exc)) from exc
             return {"predictions": predictions}
         """
-    ).strip() + "\n"
+    )
+    return template.strip().replace("__TREEHOUSE_LAB_VERSION__", __version__) + "\n"
 
 
 def _requirements_template() -> str:
