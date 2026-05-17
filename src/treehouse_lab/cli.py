@@ -37,7 +37,7 @@ def build_parser() -> argparse.ArgumentParser:
     diagnose_parser = subparsers.add_parser("diagnose", help="Show the current diagnosis and the next bounded proposal.")
     diagnose_parser.add_argument("config", type=Path, help="Path to the dataset config YAML.")
 
-    loop_parser = subparsers.add_parser("loop", help="Run the bounded autonomous research loop.")
+    loop_parser = subparsers.add_parser("loop", help="Run the bounded experiment loop.")
     loop_parser.add_argument("config", type=Path, help="Path to the dataset config YAML.")
     loop_parser.add_argument("--steps", type=int, default=3, help="Maximum number of bounded loop steps to run.")
 

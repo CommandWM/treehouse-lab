@@ -1,6 +1,6 @@
 # Benchmark Pack
 
-Treehouse Lab v1 should prove disciplined improvement, not leaderboard chasing.
+Treehouse Lab benchmarks should prove disciplined improvement, not leaderboard chasing.
 
 The benchmark pack is therefore organized around three questions:
 
@@ -19,7 +19,7 @@ Config: `configs/datasets/smoke_breast_cancer.yaml`
 Purpose:
 
 - verify the runner, promotion logic, incumbent registry, and narrative flow
-- establish a fast, stable regression target for the repo itself
+- establish a fast, stable smoke target for the repo itself
 - make failures obvious when core loop changes break something basic
 
 ### Stress
@@ -108,7 +108,7 @@ python3 scripts/fetch_covertype.py
 
 ## Fixed public suite
 
-The first v1.3 benchmark contract lives at:
+The current fixed public benchmark contract lives at:
 
 ```bash
 configs/benchmark_suites/public_v1_3.yaml
@@ -151,13 +151,13 @@ Treehouse reports should now separate three kinds of value:
 
 The bounded grounding payload is intentionally local: it points to the declared search space, loop contract, and evaluation policy rather than adding a retrieval system or external literature dependency.
 
-## 2.0 benchmark direction
+## 2.0 Benchmark Direction
 
 For `2.0`, the benchmark story should widen in one specific way: external comparison without turning the repo into a model zoo.
 
 The recommended shape is:
 
-- keep the current smoke / stress / implementation-like pack as the internal regression contract
+- keep the current smoke / stress / implementation-like pack as the internal validation contract
 - add a small public comparison suite with fixed seeds, split policy, and runtime budgets
 - compare:
   - plain XGBoost baseline
@@ -181,3 +181,5 @@ The goal is not to win every benchmark. The goal is to explain when Treehouse La
 Explicit non-goal for `2.0`:
 
 - broadening into CatBoost, LightGBM, and a larger learner matrix before the XGBoost-first loop has earned its position
+
+Regression should be added as a separate XGBoost-first benchmark track, not mixed into the current classification suite. It needs regression metrics, readiness checks, and report sections before benchmark claims are made.

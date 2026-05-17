@@ -1,76 +1,65 @@
-# MVP Plan
+# 2.0 Foundation Baseline
+
+This file records the implementation baseline that proposal grounding can cite. It is not a release checklist.
 
 ## Goal
 
-Build a disciplined autoresearch loop for single-table tabular classification with XGBoost, starting with binary and multiclass problems.
+Keep the current XGBoost-first classification loop bounded, auditable, and handoff-ready while the 2.0 contract surface is formalized for both classification and regression.
 
-## Phase 1: Baseline runner
+## Foundation Already Present
 
-Deliverables:
 - dataset config format
 - reproducible train/validation/test split handling
-- baseline XGBoost trainer
-- MLflow run logging
-- simple artifact bundle with config, metrics, and feature importances
-
-Exit criteria:
-- one command can train and log a baseline run end to end
-
-## Phase 2: Search and promotion
-
-Deliverables:
-- Optuna-driven hyperparameter search
+- baseline runner
+- bounded candidate runner
 - incumbent registry
 - promotion threshold policy
-- experiment comparison report
-- failure-safe experiment journal
+- experiment journal
+- deterministic proposal ranking
+- bounded loop controller
+- capped train-only feature generation
+- comparison harness
+- export bundle and minimal scorer wrapper
 
-Exit criteria:
-- system can propose and evaluate multiple candidates and select a winner
+## Planned Regression Foundation
 
-## Phase 3: Agent loop
+Regression belongs in the 2.0 direction, but it needs its own contracts instead of reusing classification behavior.
 
-Deliverables:
-- agent-facing `program.md`
-- constrained mutation templates
-- experiment proposal schema
-- automated promote/reject logging
+Required foundation:
 
-Exit criteria:
-- Codex or Claude Code can run bounded experiments without trampling evaluation policy
+- regression target profiling instead of classification label encoding
+- `XGBRegressor` runner path
+- regression metrics such as RMSE, MAE, and R2
+- regression-specific readiness and overfit checks
+- regression scorer response shape
+- regression benchmark fixtures and report sections
 
-## Phase 4: Feature generation
+## Guardrails That Must Stay True
 
-Deliverables:
-- deterministic train-only numeric interaction generation with hard caps
-- optional OpenFE integration
-- feature budget caps
-- leakage-safe transform policy
-- side-by-side comparison of baseline vs feature-augmented runs
+- generated features are fit on train only
+- validation and test transforms reuse the train-fitted contract
+- feature count caps remain explicit
+- candidate params stay inside `configs/search_space.yaml`
+- the target column is never part of the feature matrix
+- promotion decisions record both metric movement and readiness status
+- optional LLM guidance chooses only from explicit candidates
+- regression targets are never coerced into classification labels
 
-Exit criteria:
-- generated features can help when useful without turning the project into a science fair
+## 2.0 Contract Gaps
 
-Status:
-- the bounded numeric interaction branch now exists in-repo
-- broader OpenFE integration is still future work
+- canonical CLI workflow docs for classification and regression
+- stable CLI JSON success and failure contracts
+- API request/response docs
+- manifest and prediction schemas
+- leakage and split guardrail tests
+- deterministic promotion/rejection tests
+- agent task cards and evaluation harness
 
-## Phase 5: Shareability
-
-Deliverables:
-- benchmark pack with smoke, stress, and implementation-like examples
-- clean README walkthrough
-- reproducible quickstart
-- screenshots or sample experiment logs
-
-Exit criteria:
-- someone can clone the repo, run the benchmark pack, and understand the promote-vs-ready distinction in under ten minutes
-
-## Non-goals for v1
+## Non-Goals
 
 - general LLM literature review automation
 - distributed training
-- time series search
+- time-series search
 - multimodal tabular problems
-- production deployment hooks
+- production deployment platform work
 - automatic paper writing or blog generation

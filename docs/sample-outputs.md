@@ -217,7 +217,7 @@ Command:
   --skip-flaml
 ```
 
-Omit `--skip-flaml` in the v1.3 benchmark environment to add the budgeted FLAML runner to the same report.
+Omit `--skip-flaml` in the benchmark environment to add the budgeted FLAML runner to the same report.
 
 Representative report excerpt:
 

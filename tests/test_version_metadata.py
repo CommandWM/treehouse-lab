@@ -26,5 +26,7 @@ def test_version_metadata_matches_current_checkpoint_docs() -> None:
     assert frontend_lock["version"] == package_version
     assert frontend_lock["packages"][""]["version"] == package_version
     assert f'version="{package_version}"' in _fastapi_app_template()
-    assert f"Current checkpoint: `{checkpoint}`" in (PROJECT_ROOT / "README.md").read_text(encoding="utf-8")
-    assert f"Treehouse Lab `{checkpoint}`" in (PROJECT_ROOT / "docs" / "roadmap.md").read_text(encoding="utf-8")
+    assert f"Current package version: `{checkpoint}`" in (PROJECT_ROOT / "README.md").read_text(encoding="utf-8")
+    assert f"Implementation baseline: `{checkpoint}`" in (PROJECT_ROOT / "docs" / "roadmap.md").read_text(
+        encoding="utf-8"
+    )

@@ -19,13 +19,14 @@ For a concrete fill-in structure, use [Benchmark Report Example](benchmark-repor
 | You need a fast, transparent metric anchor | Plain XGBoost | It is the cleanest baseline and has the least workflow overhead. |
 | You need reviewable iteration with artifacts and promotion policy | Treehouse Lab | It keeps the search bounded, records proposals, journals rejected runs, and separates benchmark progress from readiness. |
 | You need broad automated model search and can tolerate less audit detail | AutoGluon or FLAML | They are stronger external automation references when raw automation breadth matters more than a readable lab trail. |
-| You need regression, hosted training, or a production serving platform | Not Treehouse Lab v1 | The current product is local, classification-first, and XGBoost-first. |
+| You need hosted training, time series, deep learning, or a production serving platform | Not Treehouse Lab 2.0 | The product direction is local, supervised-tabular, and XGBoost-first. |
+| You need regression today | Planned Treehouse 2.0 scope, not current runner support | Regression should get its own metrics, readiness checks, benchmark suite, and scorer contract before claims are made. |
 
 The positioning claim should be modest: Treehouse Lab is strongest when a team cares about constrained search, reviewability, and handoff artifacts as much as the score.
 
 ## Fixed Suite Contract
 
-The v1.3 suite is intentionally small:
+The public comparison suite is intentionally small:
 
 - `bank_marketing_uci`: mixed-type imbalanced business classification
 - `adult_uci`: mixed-type census-income classification with missing categorical values
@@ -140,7 +141,7 @@ The strongest product claim is auditability under useful constraints.
 
 Treehouse Lab v1 is not the right tool when:
 
-- the target is continuous regression
+- the target is continuous regression and the current regression contracts are not implemented yet
 - the team wants a broad model zoo
 - the only goal is the highest possible leaderboard score
 - the work needs hosted training, monitoring, or production orchestration

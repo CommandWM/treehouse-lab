@@ -103,7 +103,8 @@ Treehouse Lab should concede the comparison when:
 - plain XGBoost is equal or better and the project does not need the extra audit trail
 - AutoGluon or FLAML produces a materially better metric within the same practical budget
 - the dataset requires model families or feature semantics outside the current bounded XGBoost-first surface
-- the target is regression, hosted training, streaming inference, or production orchestration
+- the target is regression before the regression runner, metrics, benchmark suite, and export contract are implemented
+- the need is hosted training, streaming inference, or production orchestration
 - the bounded loop stops without finding a useful improvement and the artifacts do not clarify a better next move
 
 Those losses are useful. They keep Treehouse Lab's product scope legible and make the next product slice easier to prioritize.

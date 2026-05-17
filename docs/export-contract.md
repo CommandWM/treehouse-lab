@@ -1,6 +1,6 @@
 # Export Contract
 
-Treehouse Lab exports are handoff packages for a trained tabular classification run. The primary artifact is the Python model bundle; the generated FastAPI app is a thin convenience scorer around that bundle.
+Treehouse Lab exports are handoff packages for trained tabular runs. The current implementation supports classification exports. Regression exports are part of the 2.0 direction and should use the same handoff discipline with regression-specific manifest and prediction contracts.
 
 This is a stable handoff contract for the current implementation. It is not hardened production serving.
 
@@ -225,4 +225,5 @@ If the scorer is exposed outside a trusted local environment, put a production s
 - The Dockerfile is a convenience wrapper around the generated scorer and should be validated in the target environment before use.
 - The bundle format is Python and pickle based. It is not a language-neutral model artifact.
 - The current task surface is classification. Binary and multiclass responses have slightly different fields.
+- Regression export support is planned and should not reuse classification probability, threshold, or label fields.
 - No Salesforce-specific handoff, deployment, or API integration is implemented by the repo today.

@@ -1,123 +1,145 @@
 # Roadmap
 
-## Current position
+## Current Position
 
-Treehouse Lab `v1.2.0` is no longer a pre-MVP sketch, and v1.2 Product Polish is closed.
+Implementation baseline: `v1.2.0`.
 
-The repo already has:
+Treehouse Lab is moving toward a 2.0 release framed as a contract-first, audit-first, agent-accessible tabular ML workbench.
+
+The repo already has useful building blocks:
 
 - dataset-first intake and generated dataset specs
-- a bounded XGBoost-first baseline / candidate / diagnose / propose / loop flow
+- bounded XGBoost-first classification baseline, candidate, diagnose, propose, loop, compare, and export flows
 - incumbent promotion and human-readable run summaries
 - a React workbench for intake, current state, journal inspection, settings, and architecture
-- a capped train-only feature-generation branch for plateaued loops
+- capped train-only feature generation for plateaued loops
+- export contracts and scorer smoke tests
+- fixed public benchmark-suite wiring
 
-That means the roadmap should now optimize for real benchmark evidence and bounded search quality, not breadth.
+The next work should sharpen contracts and evidence, not broaden the learner surface.
 
-## v1.2 Product Polish Closeout
+## 2.0 North Star
 
-v1.2 Product Polish is closed as a shareability and auditability layer around the shipped v1.2 checkpoint. The durable closeout is [v1.2 Product Polish](v1-2-polish.md).
+A user should be able to move from dataset to defensible model artifact through a bounded, reproducible workflow:
 
-Closed Linear scope:
+```bash
+treehouse init --dataset data/churn.csv --target churn --task classification
+treehouse profile
+treehouse baseline
+treehouse loop --budget 5
+treehouse compare
+treehouse export --run best
+treehouse serve exported/churn_model
+```
 
-- `COM-5`: walkthrough and screenshot review path
-- `COM-6`: public dataset paths for `bank_marketing_uci`, `adult_uci`, and `covertype_uci`
-- `COM-7`: sample outputs for baseline, proposal, journal, and compare report
-- `COM-8`: feature-generation decision visibility
-- `COM-9`: benchmark-better versus implementation-ready clarity across docs and workbench
-- `COM-18`: final README positioning, version consistency, export contract, scorer tests, and benchmark report example
+Some of those command names are still planned rather than implemented. The contract docs should always distinguish current commands from target workflow names.
 
-What remains after v1.2 is evidence generation, not polish: run the fixed public suite, fill real report outputs, then continue bounded XGBoost search depth.
+The same 2.0 workflow should cover regression with XGBoost once the underlying task support lands:
 
-## What `2.0` should be
+```bash
+treehouse init --dataset data/housing.csv --target sale_price --task regression
+treehouse profile
+treehouse baseline
+treehouse loop --budget 5
+treehouse compare
+treehouse export --run best
+treehouse serve exported/housing_model
+```
 
-Version `2.0` should be the release where Treehouse Lab proves why it exists.
+2.0 succeeds when Treehouse can produce:
 
-The core move is not "add more learners." The core move is:
+- dataset profile
+- baseline metrics
+- candidate run history
+- incumbent decision log
+- promotion and rejection reasons
+- journal and report artifacts
+- export manifest
+- model bundle
+- minimal scorer API
+- documented CLI/API contracts
 
-- stay XGBoost-first
-- benchmark honestly against strong external baselines
-- show that Treehouse Lab adds value through bounded search, promotion policy, artifacts, and auditability
+## Workstreams
 
-## `2.0` priorities
+### 1. Identity And Contracts
 
-### 1. XGBoost-first benchmark harness
+Make the project legible before adding more behavior.
 
-Build a small public dataset suite with fixed seeds, split policy, and runtime budgets.
+Deliverables:
 
-Compare:
+- 2.0 vision doc
+- README opening aligned to audit-first tabular ML
+- architecture refresh
+- contracts index
+- explicit non-goals
+- release checklist
 
-- plain XGBoost baseline
-- Treehouse Lab baseline
-- Treehouse Lab bounded loop
-- FLAML
-- AutoGluon
+### 2. CLI As The Primary Serious Interface
 
-Report:
+The CLI should be stable enough for humans, scripts, CI, and coding agents.
 
-- primary metric
-- runtime
-- artifact quality
-- interpretability / auditability
+Deliverables:
 
-The output should answer a simple product question:
+- canonical CLI workflow doc
+- implemented or explicitly deferred command aliases
+- stable JSON success and failure contracts
+- help coverage for public commands
+- examples that identify expected artifacts
 
-- when should someone use Treehouse Lab instead of FLAML or AutoGluon?
+### 3. API And Export Handoff
 
-### 2. Better bounded search, not a broader learner matrix
+The local API and exported scorer package should be useful to downstream systems without source-code inspection.
 
-Deepen the current loop without relaxing the rules:
+Deliverables:
 
-- bounded Optuna search inside `configs/search_space.yaml`
-- richer mutation templates with explicit validation
-- stronger feature-generation audit trails
-- tighter candidate-vs-incumbent comparison
+- API contract docs
+- response-shape tests
+- manifest schema
+- prediction request and response schemas
+- export smoke tests tied to the documented contract
 
-The point is to improve the quality of the existing bounded loop, not to chase breadth.
+### 4. Evaluation, Benchmarking, And Anti-Leakage
 
-### 3. Strong public demo quality
+Treehouse should be honest about model quality and readiness.
 
-Make the repo easy to understand and share:
+Deliverables:
 
-- keep the v1.2 walkthrough, screenshots, sample outputs, export contract, and benchmark report example current
-- replace benchmark report placeholders with real fixed-suite outputs before making external claims
-- package the evidence into a clear 2.0 positioning story
+- refreshed evaluation policy
+- benchmark harness contract
+- reusable benchmark report template
+- leakage and split guardrail tests
+- deterministic promotion and rejection policy tests
+- regression metrics, readiness checks, and benchmark suites that are separate from classification policy
 
-## Explicit non-goals for `2.0`
+### 5. Agent Accessibility
 
-These are intentionally not the focus:
+Agents should be consumers of public contracts, not privileged authors of hidden behavior.
 
-- CatBoost or LightGBM expansion
-- open-ended model-zoo work
-- unconstrained agent code rewriting
-- giant public benchmark suites across dozens of datasets
-- production-serving platform work
+Deliverables:
 
-## How the current GitHub roadmap issues map now
+- agent usage doc
+- machine-readable command guide
+- task cards for profile, baseline, loop, compare, export, and scorer smoke tests
+- agent-accessibility evaluation
+- guardrails against free-form mutation of splits, targets, or evaluation policy
 
-The open GitHub roadmap issues are useful, but several describe work that is already shipped in whole or in part.
+## Non-Goals For 2.0
 
-### Effectively shipped or mostly absorbed by the current v1 checkpoint
+- broad AutoML
+- production serving infrastructure
+- general-purpose agent framework behavior
+- notebook-only workflows
+- CatBoost, LightGBM, deep learning, or time-series expansion before the XGBoost-first classification and regression contracts are solid
+- benchmark claims without fresh run artifacts and report evidence
 
-- issue `#3`: dataset spec and first benchmark dataset
-- issue `#4`: reproducible split handling and leakage checks
-- issue `#5`: runnable baseline XGBoost command
-- issue `#6`: run logging and artifact persistence
-- issue `#7`: incumbent registry and promotion policy
-- issue `#8`: human-readable journal
-- issue `#10`: Codex-safe mutation templates, at least for the current bounded loop
+## First PR-Sized Slice
 
-### Still active, but should be reframed
+Start with the documentation and instruction layer:
 
-- issue `#9`: bounded Optuna search should deepen the current XGBoost-first loop, not broaden the model surface
-- issue `#11`: benchmark against FLAML and AutoGluon should become a centerpiece of `2.0`
-- issue `#12`: public-demo polish should support the benchmark-and-positioning story, not just repo cosmetics
+1. update `AGENTS.md`
+2. add `docs/vision-2.0.md`
+3. rewrite the README opening around 2.0
+4. add `docs/contracts.md`
+5. add `docs/cli.md`
 
-## Product stance
-
-Treehouse Lab should feel like a disciplined lab notebook with execution attached.
-
-If the project keeps that identity, `2.0` can become a credible answer to a real question:
-
-- not "can we add more models?"
-- but "can we make tabular autoresearch reviewable, bounded, and worth using?"
+That makes later implementation work safer because every public surface has a named contract to satisfy.

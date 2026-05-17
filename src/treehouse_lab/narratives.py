@@ -143,7 +143,7 @@ def build_loop_summary(dataset_key: str, history: list[dict[str, Any]], final_in
         for step in history
     )
     return LoopNarrative(
-        title=f"{dataset_key} autonomous loop",
+        title=f"{dataset_key} bounded loop",
         markdown="\n".join(lines),
     )
 
