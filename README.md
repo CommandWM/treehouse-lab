@@ -360,10 +360,11 @@ Examples are bundled so the repo is usable offline:
 
 This keeps the onboarding path self-contained while the benchmark pack evolves.
 
-The benchmark pack is documented in [docs/benchmarks.md](docs/benchmarks.md), the decision-facing benchmark report guide is in [docs/benchmark-report.md](docs/benchmark-report.md), the readiness criteria are documented in [docs/evaluation-policy.md](docs/evaluation-policy.md), and the core terms are collected in [docs/glossary.md](docs/glossary.md).
+The benchmark pack is documented in [docs/benchmarks.md](docs/benchmarks.md), the decision-facing benchmark report guide is in [docs/benchmark-report.md](docs/benchmark-report.md), the readiness criteria are documented in [docs/evaluation-policy.md](docs/evaluation-policy.md), the export handoff contract is documented in [docs/export-contract.md](docs/export-contract.md), and the core terms are collected in [docs/glossary.md](docs/glossary.md).
 
 If you want the shortest user-facing path through the current product, start with [docs/walkthrough.md](docs/walkthrough.md).
 If you want to see what the product actually emits before running it yourself, read [docs/sample-outputs.md](docs/sample-outputs.md).
+If you want the v1.2 polish closeout and review checklist, read [docs/v1-2-polish.md](docs/v1-2-polish.md).
 
 ## UI Architecture
 
@@ -382,12 +383,11 @@ That split is deliberate. It keeps the Python loop stable while making the teach
 
 ## Near-term roadmap
 
-The next useful work is not a broad rewrite. It is disciplined tightening around the current `v1.1` loop:
+The v1.2 polish layer is closed around the current `v1.1` loop. The next useful work is not a broad rewrite; it is backing the benchmark story with fresh suite outputs and then deepening bounded XGBoost search:
 
-- make feature-generation decisions easier to audit and compare across runs
-- keep improving the guided React workbench so the dataset-first path is obvious to a new user
-- expand the benchmark pack and test against more real local datasets
-- improve shareability with cleaner walkthroughs, screenshots, and sample research trails
+- run the fixed public suite and replace placeholder report cells with real evidence
+- keep feature-generation decisions easy to audit and compare across runs
+- keep the guided React workbench intake-first as new capabilities are added
 - evaluate a broader feature stage later without relaxing leakage guardrails or bounded mutation policy
 
 ## 2.0 direction

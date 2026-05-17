@@ -7,7 +7,8 @@ This page captures representative real outputs from the current product surface:
 1. baseline
 2. bounded proposal
 3. journal entry
-4. compare report
+4. feature-generation decision
+5. compare report
 
 These are intentionally excerpts rather than full raw artifacts. The goal is to show what the product leaves behind and how to read it.
 
@@ -170,6 +171,40 @@ What this shows:
 - a run can still clear most checks and remain `needs_more_work`
 - the rejection reason and the exact proposal stay attached to the entry
 
+## Feature-Generation Decision
+
+Feature generation is a bounded branch, not a hidden default. When the loop selects it, the decision should show the train-only plan, feature cap, and outcome gates together.
+
+Representative feature-generation excerpt:
+
+```json
+{
+  "mutation_name": "feature-generation-enable",
+  "mutation_type": "feature_generation_enable",
+  "stage": "feature_generation",
+  "risk_level": "medium",
+  "feature_generation": {
+    "enabled": true,
+    "strategy": "numeric_interactions",
+    "max_new_features": 4,
+    "top_k_numeric": 3,
+    "operations": ["square", "product"],
+    "reason": "Recent bounded parameter moves plateaued, so try a capped train-only feature branch."
+  },
+  "assessment": {
+    "benchmark_status": "not_better_than_incumbent",
+    "implementation_readiness": "needs_more_work"
+  }
+}
+```
+
+What this shows:
+
+- the feature branch stays explicit before execution
+- the cap is visible and reviewable
+- generated features are judged against both benchmark status and implementation readiness
+- added feature complexity can be rejected even when the run remains useful evidence
+
 ## Compare Report
 
 Command:
@@ -245,6 +280,7 @@ If you are reviewing Treehouse Lab quickly, read the outputs in this order:
 1. baseline
 2. proposal
 3. journal
-4. compare report
+4. feature-generation decision
+5. compare report
 
 That sequence shows the product shape more honestly than a single metric table.

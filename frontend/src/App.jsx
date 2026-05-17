@@ -1237,7 +1237,7 @@ function renderActiveView(context) {
           <div className="panel-header">
             <div>
               <div className="section-label">Outcome Gates</div>
-              <h3>Keep benchmark progress separate from implementation readiness</h3>
+              <h3>Benchmark progress and implementation readiness stay separate</h3>
             </div>
           </div>
           <div className="assessment-grid">
@@ -1657,7 +1657,7 @@ function ProposalExecutionCard({ proposal }) {
 
   return (
     <div className="note-card note-card--tight">
-      <strong>Execution shape</strong>
+      <strong>Feature Decision</strong>
       <div className="chip-group">
         <span className="chip">stage: {proposal.stage ?? "parameter_tuning"}</span>
         <span className="chip">risk: {proposal.risk_level ?? "n/a"}</span>
@@ -1674,7 +1674,7 @@ function ProposalExecutionCard({ proposal }) {
       </div>
       <p className="detail-copy">
         {featureEnabled
-          ? featureGeneration.reason ?? "This bounded move adds a capped train-only feature branch."
+          ? featureGeneration.reason ?? "This bounded move adds a capped train-only feature branch, so the cap stays explicit before execution."
           : proposal.expected_upside ?? "This bounded move stays in parameter space."}
       </p>
     </div>

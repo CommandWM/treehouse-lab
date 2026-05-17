@@ -2,7 +2,7 @@
 
 ## Current position
 
-Treehouse Lab `v1.1.0` is no longer a pre-MVP sketch.
+Treehouse Lab `v1.1.0` is no longer a pre-MVP sketch, and v1.2 Product Polish is closed.
 
 The repo already has:
 
@@ -12,17 +12,22 @@ The repo already has:
 - a React workbench for intake, current state, journal inspection, settings, and architecture
 - a capped train-only feature-generation branch for plateaued loops
 
-That means the roadmap should now optimize for clarity, auditability, and positioning, not for breadth.
+That means the roadmap should now optimize for real benchmark evidence and bounded search quality, not breadth.
 
-## What `v1.1` still needs
+## v1.2 Product Polish Closeout
 
-These are the highest-leverage refinements before calling the current direction mature:
+v1.2 Product Polish is closed as a shareability and auditability layer around the shipped v1.1 product. The durable closeout is [v1.2 Product Polish](v1-2-polish.md).
 
-- better public walkthroughs and screenshots
-- a second or third strong public dataset path through intake
-- cleaner sample outputs for baseline, bounded proposals, and journal inspection
-- stronger comparison views around feature-generation decisions
-- tighter benchmark documentation that explains benchmark-better vs implementation-ready
+Closed Linear scope:
+
+- `COM-5`: walkthrough and screenshot review path
+- `COM-6`: public dataset paths for `bank_marketing_uci`, `adult_uci`, and `covertype_uci`
+- `COM-7`: sample outputs for baseline, proposal, journal, and compare report
+- `COM-8`: feature-generation decision visibility
+- `COM-9`: benchmark-better versus implementation-ready clarity across docs and workbench
+- `COM-18`: final README positioning, version consistency, export contract, scorer tests, and benchmark report example
+
+What remains after v1.2 is evidence generation, not polish: run the fixed public suite, fill real report outputs, then continue bounded XGBoost search depth.
 
 ## What `2.0` should be
 
@@ -74,11 +79,9 @@ The point is to improve the quality of the existing bounded loop, not to chase b
 
 Make the repo easy to understand and share:
 
-- true quickstart
-- example walkthrough
-- screenshots and diagrams
-- sample baseline, candidate, journal, and incumbent outputs
-- a benchmark report page that states strengths and weaknesses plainly
+- keep the v1.2 walkthrough, screenshots, sample outputs, export contract, and benchmark report example current
+- replace benchmark report placeholders with real fixed-suite outputs before making external claims
+- package the evidence into a clear 2.0 positioning story
 
 ## Explicit non-goals for `2.0`
 
