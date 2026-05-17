@@ -1,6 +1,6 @@
 # v1.2 Product Polish
 
-Treehouse Lab v1.2 Product Polish is the shareability and clarity closeout for the current v1.1 product surface.
+Treehouse Lab v1.2 Product Polish is the shareability and clarity closeout for the current v1.2 checkpoint.
 
 This page is the durable handoff for the Linear v1.2 polish scope. It records what is now present in the repo, where to review it, and what still belongs to later benchmark or v1.3 implementation work.
 
@@ -13,7 +13,7 @@ This page is the durable handoff for the Linear v1.2 polish scope. It records wh
 | `COM-7` cleaner sample outputs | `docs/sample-outputs.md` shows baseline, proposal, journal, and compare-report excerpts in the expected reading order. |
 | `COM-8` feature-generation decision visibility | The compare report and workbench expose whether the feature branch was considered, selected, applied, capped, and justified. |
 | `COM-9` benchmark-vs-readiness clarity | README, benchmark docs, sample outputs, report examples, and the workbench keep benchmark progress separate from implementation readiness. |
-| `COM-18` v1.1 positioning/export/report polish | `docs/export-contract.md`, `docs/benchmark-report-example.md`, and version metadata tests complete the final v1.2 closeout slice. |
+| `COM-18` positioning/export/report polish | `docs/export-contract.md`, `docs/benchmark-report-example.md`, and version metadata tests complete the final v1.2 closeout slice. |
 
 ## Review Path
 
@@ -89,4 +89,3 @@ The v1.2 polish layer is closed, but the following are still later work:
 - run the fixed public suite and replace `TBD` placeholders with real outputs
 - deepen bounded XGBoost search quality under `COM-14`
 - package the real benchmark evidence into the later `COM-15` positioning release
-

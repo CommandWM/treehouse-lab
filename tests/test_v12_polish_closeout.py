@@ -46,6 +46,9 @@ def test_readme_and_roadmap_point_to_v12_closeout() -> None:
     roadmap = read_project_file("docs/roadmap.md")
     sample_outputs = read_project_file("docs/sample-outputs.md")
 
+    assert "## v1.2 polish status" in readme
+    assert "v1.2 Product Polish is closed" in readme
+    assert "not a benchmark claim" in readme
     assert "[docs/v1-2-polish.md](docs/v1-2-polish.md)" in readme
     assert "v1.2 Product Polish is closed" in roadmap
     assert "## Feature-Generation Decision" in sample_outputs

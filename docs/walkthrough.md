@@ -2,7 +2,7 @@
 
 Treehouse Lab should be usable without reverse-engineering the repo.
 
-This page is the shortest practical path through the current `v1.1.x` product:
+This page is the shortest practical path through the current `v1.2.x` product:
 
 1. bring a dataset through intake
 2. establish or inspect an incumbent

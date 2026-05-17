@@ -2,7 +2,7 @@
 
 ## Current position
 
-Treehouse Lab `v1.1.0` is no longer a pre-MVP sketch, and v1.2 Product Polish is closed.
+Treehouse Lab `v1.2.0` is no longer a pre-MVP sketch, and v1.2 Product Polish is closed.
 
 The repo already has:
 
@@ -16,7 +16,7 @@ That means the roadmap should now optimize for real benchmark evidence and bound
 
 ## v1.2 Product Polish Closeout
 
-v1.2 Product Polish is closed as a shareability and auditability layer around the shipped v1.1 product. The durable closeout is [v1.2 Product Polish](v1-2-polish.md).
+v1.2 Product Polish is closed as a shareability and auditability layer around the shipped v1.2 checkpoint. The durable closeout is [v1.2 Product Polish](v1-2-polish.md).
 
 Closed Linear scope:
 
@@ -97,7 +97,7 @@ These are intentionally not the focus:
 
 The open GitHub roadmap issues are useful, but several describe work that is already shipped in whole or in part.
 
-### Effectively shipped or mostly absorbed by `v1.1`
+### Effectively shipped or mostly absorbed by the current v1 checkpoint
 
 - issue `#3`: dataset spec and first benchmark dataset
 - issue `#4`: reproducible split handling and leakage checks

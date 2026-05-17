@@ -11,9 +11,15 @@
 
 Treehouse Lab is an audit-first workbench for tabular machine learning.
 
-Current checkpoint: `v1.1.0`. The repo now has a real end-to-end local workflow: dataset-first intake, bounded XGBoost-first experiments, grounded LLM assistance, coach-triggered bounded execution, local settings for provider credentials, explicit binary or multiclass classification support, benchmark comparisons, experiment journals, promotion policy, and exportable model bundles with optional container packaging.
+Current checkpoint: `v1.2.0`. This checkpoint keeps the XGBoost-first local loop and closes the Product Polish shareability layer around it. The repo now has a real end-to-end local workflow: dataset-first intake, bounded XGBoost-first experiments, grounded LLM assistance, coach-triggered bounded execution, local settings for provider credentials, explicit binary or multiclass classification support, benchmark comparisons, experiment journals, promotion policy, and exportable model bundles with optional container packaging.
 
 The practical goal is simple: bring a local tabular dataset into a reviewable experiment loop, run only bounded candidate changes, promote only meaningful improvements, and leave behind enough artifacts for another person to audit the result without digging through a notebook pile.
+
+## v1.2 polish status
+
+v1.2 Product Polish is closed. It adds the shareability layer around the current `v1.2.0` loop: intake-first walkthroughs, current workbench screenshots, public dataset probe paths, sample baseline/proposal/journal/feature-generation/compare outputs, explicit benchmark-vs-readiness language, and export contract docs with scorer tests.
+
+Use [docs/v1-2-polish.md](docs/v1-2-polish.md) as the closeout checklist. This is not a benchmark claim. A benchmark claim still needs fresh fixed-suite outputs, environment notes, commit evidence, and dataset-level report artifacts.
 
 ## Why this exists
 
@@ -383,7 +389,7 @@ That split is deliberate. It keeps the Python loop stable while making the teach
 
 ## Near-term roadmap
 
-The v1.2 polish layer is closed around the current `v1.1` loop. The next useful work is not a broad rewrite; it is backing the benchmark story with fresh suite outputs and then deepening bounded XGBoost search:
+The v1.2 polish layer is closed around the current `v1.2` loop. The next useful work is not a broad rewrite; it is backing the benchmark story with fresh suite outputs and then deepening bounded XGBoost search:
 
 - run the fixed public suite and replace placeholder report cells with real evidence
 - keep feature-generation decisions easy to audit and compare across runs
@@ -401,7 +407,7 @@ Version `2.0` should not be a model-zoo release. The stronger direction is:
 
 See [docs/benchmark-report.md](docs/benchmark-report.md) for the product-facing interpretation layer: when to use Treehouse Lab, when to prefer plain XGBoost or AutoML, and what evidence must be present before a result is publishable.
 
-See [docs/roadmap.md](docs/roadmap.md) for the integrated roadmap and how the current GitHub roadmap issues map onto the shipped `v1.1` state.
+See [docs/roadmap.md](docs/roadmap.md) for the integrated roadmap and how the current GitHub roadmap issues map onto the shipped `v1.2` state.
 
 ## How the loop works
 

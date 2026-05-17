@@ -19,6 +19,7 @@ def test_version_metadata_matches_current_checkpoint_docs() -> None:
     package_version = pyproject["project"]["version"]
     checkpoint = f"v{package_version}"
 
+    assert package_version == "1.2.0"
     assert treehouse_lab.__version__ == package_version
     assert api.app.version == package_version
     assert frontend_package["version"] == package_version
